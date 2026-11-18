@@ -60,12 +60,12 @@
   blockquote.yuan{border-left:4px solid var(--zhu);background:#f6eedc;padding:.8em 1em;border-radius:0 10px 10px 0;
        font-size:1.12rem;line-height:2;letter-spacing:.04em}
   /* 3D 檢視器 */
-  #viewer{position:relative;overflow:hidden;border-radius:14px;background:#e9e0cc;touch-action:none;height:min(640px, calc(100vh - 110px));min-height:460px}
+  #viewer{position:relative;overflow:hidden;border-radius:14px;background:#e9e0cc;touch-action:none;height:min(640px, calc(100vh - 160px));min-height:460px}
   #viewer canvas{display:block;width:100%;height:100%;outline:none}
   #labels{position:absolute;inset:0;pointer-events:none}
   .lab{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;white-space:nowrap;
        font-size:13px;line-height:1.2;padding:4px 9px;border-radius:8px;background:rgba(251,246,234,.92);border:1px solid #9c8a6b;
-       color:var(--ink);box-shadow:0 3px 10px -4px rgba(0,0,0,.4);cursor:pointer;transition:background .15s}
+       color:var(--ink);box-shadow:0 3px 10px -4px rgba(0,0,0,.4);cursor:pointer;transition:background .15s, opacity .2s ease;opacity:0}
   .lab:hover{background:#fff}
   .lab::after{content:'';position:absolute;left:50%;bottom:-7px;width:1px;height:7px;background:#6d5d45}
   .lab small{display:block;font-size:10.5px;color:var(--ink2)}
@@ -116,6 +116,30 @@
   }
   /* 偽全螢幕（iPhone 等不支援元素全螢幕時） */
   .pseudo-fs{position:fixed !important;inset:0 !important;z-index:50;height:100vh !important;border-radius:0 !important}
+  /* ---------- 分頁、印章、測驗、證書（v2） ---------- */
+  .tab{white-space:nowrap;border:1px solid #bba987;border-radius:999px;padding:.45em 1.05em;min-height:44px;background:#fbf6ea;font-weight:700;transition:background .2s,color .2s}
+  .tab.on{background:var(--zhu);border-color:var(--zhu);color:#fff6ef;box-shadow:0 4px 12px -6px rgba(168,50,42,.7)}
+  .stamp{width:54px;height:54px;margin:0 auto;border:2px dashed #b9a782;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#b9a782;font-weight:900;line-height:1.05;font-size:17px;transform:rotate(-4deg);background:rgba(255,255,255,.35)}
+  .stamp.on{border:none;background:var(--zhu);color:#fbf1e4;box-shadow:inset 0 0 0 3px #fbf1e4, inset 0 0 0 5px var(--zhu);
+     -webkit-mask:radial-gradient(circle at 30% 20%, transparent 1.5px, #000 2px) 0 0/9px 11px; mask:radial-gradient(circle at 30% 20%, transparent 1.5px, #000 2px) 0 0/9px 11px}
+  .stamp.big{width:84px;height:84px;font-size:27px}
+  @keyframes press{0%{transform:scale(2.4) rotate(-20deg);opacity:0}60%{transform:scale(.92) rotate(-4deg);opacity:1}100%{transform:scale(1) rotate(-4deg)}}
+  .press .stamp, #sealToast .stamp{animation:press .55s cubic-bezier(.3,1.4,.5,1) both .15s}
+  @keyframes toastIn{from{opacity:0;transform:translate(-50%,-12px)}to{opacity:1;transform:translate(-50%,0)}}
+  #sealToast{position:fixed;left:50%;top:120px;transform:translateX(-50%);z-index:70;gap:14px;align-items:center;background:#fbf7ee;border:1px solid #cdbd9c;border-radius:16px;padding:12px 20px 12px 14px;box-shadow:0 16px 40px -12px rgba(0,0,0,.45);min-width:260px}
+  .qdot{flex:1;height:6px;border-radius:9px;display:block;transition:background .3s}
+  .qcard{animation:pop .3s ease}
+  .opt:disabled{cursor:default}
+  .field{border:1px solid #bba987;border-radius:10px;padding:.55em .8em;background:#fffdf7;min-height:46px;font-size:1.05rem;width:100%}
+  .field:focus{outline:2px solid var(--zhu);outline-offset:1px}
+  #certImg{box-shadow:0 14px 34px -16px rgba(0,0,0,.55);border-radius:6px;-webkit-touch-callout:default}
+  #certPrint{display:none}
+  @media print{
+    @page{size:A4 landscape;margin:8mm}
+    body:has(#certPrintImg[src]) > *:not(#certPrint){display:none !important}
+    body:has(#certPrintImg[src]) #certPrint{display:block !important}
+    #certPrint img{max-width:100%;max-height:185mm;width:auto;height:auto;display:block;margin:0 auto}
+  }
   @media (prefers-reduced-motion: reduce){ *{animation:none !important;transition:none !important} }
 </style>
 </head>
@@ -126,15 +150,21 @@
   <div class="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
     <span class="seal text-sm">項脊</span>
     <b class="ink-title text-lg">項脊軒志・立體構造圖</b>
-    <nav class="ml-auto hidden md:flex gap-1 text-sm">
-      <a class="btn" href="#model">3D 模型</a><a class="btn" href="#timeline">時間軸</a>
-      <a class="btn" href="#study">文本研讀</a><a class="btn" href="#quiz">測驗</a>
-    </nav>
-    <button id="muteBtn" class="btn ml-auto md:ml-2" aria-label="音效開關">🔊 音效</button>
+    <button id="progPill" class="btn ml-auto text-sm" title="我的學習進度">📜 進度 <b id="progPct">0%</b>・印 <b id="progSeals">0</b>/9</button>
+    <button id="muteBtn" class="btn text-sm" aria-label="音效開關">🔊 音效</button>
   </div>
+  <!-- 分頁列：以 style.display 切換 -->
+  <nav class="max-w-7xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto" aria-label="分頁">
+    <button class="tab on" data-tab="explore">🏯 探索模型</button>
+    <button class="tab" data-tab="study">📜 文本研讀</button>
+    <button class="tab" data-tab="quiz">✍ 闖關測驗</button>
+    <button class="tab" data-tab="cert">🎓 我的證書</button>
+  </nav>
 </header>
 
 <main class="max-w-7xl mx-auto px-4 pb-16">
+<!-- ===== 分頁一：探索模型 ===== -->
+<div id="tab-explore">
 
 <!-- ============ Hero ============ -->
 <section class="pt-8 pb-6 grid md:grid-cols-[1fr_auto] gap-6 items-center">
@@ -150,7 +180,7 @@
     <div class="mt-5 flex flex-wrap gap-2">
       <a href="#model" class="btn btn-zhu">▶ 開始探索 3D 模型</a>
       <a href="#timeline" class="btn">⏳ 時間軸</a>
-      <a href="#quiz" class="btn">✍ 學測式測驗</a>
+      <button class="btn" data-goto-tab="quiz">✍ 闖關測驗・領證書</button>
     </div>
   </div>
   <div class="card p-4 max-w-sm">
@@ -248,29 +278,90 @@
   <div id="tlCard" class="mt-4 grid md:grid-cols-[1.2fr_1fr] gap-4"></div>
 </section>
 
+</div>
+<!-- ===== 分頁二：文本研讀 ===== -->
+<div id="tab-study" style="display:none">
 <!-- ============ 文本研讀（手風琴） ============ -->
 <section id="study" class="mt-6 scroll-mt-20">
   <div class="flex items-center gap-3 mb-3"><span class="seal text-sm">研讀</span><h2 class="text-2xl font-bold ink-title">文本研讀：空間 × 情感</h2></div>
   <div id="acc" class="flex flex-col gap-3"></div>
 </section>
 
-<!-- ============ 測驗 ============ -->
-<section id="quiz" class="card p-4 md:p-6 mt-6 scroll-mt-20">
-  <div class="flex flex-wrap items-center gap-3 card-h pb-3">
-    <span class="seal text-sm">測驗</span>
-    <h2 class="text-2xl font-bold ink-title">學測／分科式小測驗</h2>
-    <span id="quizScore" class="ml-auto text-[var(--zhu)] font-bold"></span>
-  </div>
-  <div id="quizBox" class="mt-3 grid gap-4"></div>
-  <div class="mt-4 flex gap-2"><button class="btn" id="quizReset">↺ 重新作答</button></div>
+<section class="card p-4 mt-4 flex flex-wrap items-center gap-3">
+  <p class="leading-8">讀完了嗎？到「闖關測驗」檢驗自己，三關全過即可領取結業證書。</p>
+  <button class="btn btn-zhu ml-auto" data-goto-tab="quiz">✍ 前往闖關</button>
 </section>
+</div>
 
-<footer class="mt-8 text-xs leading-6 text-[var(--ink2)]">
+<!-- ===== 分頁三：闖關測驗 ===== -->
+<div id="tab-quiz" style="display:none">
+<section class="card p-4 md:p-6 mt-6">
+  <div class="flex flex-wrap items-center gap-3 card-h pb-3">
+    <span class="seal text-sm">闖關</span>
+    <h2 class="text-2xl font-bold ink-title">闖關測驗：三關登堂入室</h2>
+    <span id="lvPassed" class="ml-auto text-[var(--zhu)] font-bold"></span>
+  </div>
+  <p class="mt-3 leading-8 text-[var(--ink2)]">學測／分科測驗風格。每關從題庫<b>隨機抽 5 題</b>（選項順序也會打亂），答對 <b>4 題（80%）</b>即過關、蓋上關印並解鎖下一關；三關全過，「我的證書」就會解鎖。成績取各關最佳，可無限次重新挑戰。答錯沒關係——每題都有解析與「🔎 在模型中查看」。</p>
+  <div id="lvGrid" class="grid md:grid-cols-3 gap-4 mt-4"></div>
+  <div id="quizPlay" class="mt-4" style="display:none"></div>
+  <div id="quizResult" class="mt-4" style="display:none"></div>
+</section>
+<section class="card p-4 mt-4">
+  <h3 class="font-bold mb-3">我的印章（探索、研讀、闖關都能蓋章）</h3>
+  <div id="sealStrip" class="grid grid-cols-5 sm:grid-cols-9 gap-3"></div>
+</section>
+</div>
+
+<!-- ===== 分頁四：我的證書 ===== -->
+<div id="tab-cert" style="display:none">
+<section class="card p-4 md:p-6 mt-6">
+  <div class="flex flex-wrap items-center gap-3 card-h pb-3 mb-4">
+    <span class="seal text-sm">紀錄</span>
+    <h2 class="text-2xl font-bold ink-title">我的學習紀錄</h2>
+  </div>
+  <div id="recordPanel"></div>
+</section>
+<section id="certLocked" class="card p-6 md:p-10 mt-4 text-center">
+  <div class="text-6xl">🔒</div>
+  <h2 class="text-2xl md:text-3xl font-black mt-2">結業證書尚未解鎖</h2>
+  <p class="mt-2 leading-8">通過「闖關測驗」三道關卡（每關答對 4/5 題）即可解鎖，輸入姓名後產生專屬證書。</p>
+  <ul id="certChecklist" class="inline-block text-left mt-3 leading-9"></ul>
+  <div class="mt-4"><button class="btn btn-zhu" data-goto-tab="quiz">✍ 前往闖關測驗</button></div>
+</section>
+<section id="certOpen" class="card p-4 md:p-6 mt-4" style="display:none">
+  <div class="flex flex-wrap items-center gap-3 card-h pb-3">
+    <span class="seal text-sm">證書</span>
+    <h2 class="text-2xl font-bold ink-title">〈項脊軒志〉研讀結業證書</h2>
+    <span class="chip tag-text ml-auto">✅ 已通過三關</span>
+  </div>
+  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+    <label class="text-sm">姓名＊<input id="ci-name" class="field mt-1" maxlength="20" placeholder="例如：林小明" autocomplete="off"></label>
+    <label class="text-sm">班級<input id="ci-cls" class="field mt-1" maxlength="20" placeholder="例如：二年十班" autocomplete="off"></label>
+    <label class="text-sm">座號<input id="ci-seat" class="field mt-1" maxlength="6" placeholder="例如：12" inputmode="numeric" autocomplete="off"></label>
+    <label class="text-sm">授課教師（可留白親簽）<input id="ci-teacher" class="field mt-1" maxlength="20" placeholder="例如：○○○ 老師" autocomplete="off"></label>
+  </div>
+  <div class="flex flex-wrap gap-2 mt-4">
+    <button id="certDl" class="btn btn-zhu">📸 下載證書 PNG</button>
+    <button id="certPr" class="btn">🖨 列印證書</button>
+    <button id="certSh" class="btn" style="display:none">📤 分享／存到相簿</button>
+  </div>
+  <p id="certNote" class="text-sm mt-2 text-[var(--ink2)]">輸入資料後證書會即時更新；資料只存在本機瀏覽器。</p>
+  <img id="certImg" class="w-full mt-4" alt="結業證書預覽">
+</section>
+<section class="card p-4 mt-4 flex flex-wrap items-center gap-3">
+  <p class="text-sm leading-7 text-[var(--ink2)]">換下一位同學使用這台平板？可清除本機的學習紀錄、闖關成績與證書資料。</p>
+  <button id="progReset" class="btn ml-auto">🗑 重設學習紀錄</button>
+</section>
+</div>
+
+<footer class="mt-8 no-print text-xs leading-6 text-[var(--ink2)]">
   <p>原文依據：中文維基文庫〈項脊軒志〉（《震川先生集》卷十七本）。底本作「南閤子」「客逾庖而宴」「亦遂（一作逐）增勝」，本頁依臺灣高中課本通行寫法作「閣」「踰」；「諸葛孔明起隴中」之「隴中」即「隆中」。</p>
   <p>本模型為<b>文本推測復原</b>，尺寸以明代一丈約 3.1–3.2 公尺換算，僅供教學討論。</p>
 </footer>
 </main>
 
+<div id="sealToast" style="display:none" role="status"></div>
+<div id="certPrint"><img id="certPrintImg" alt="結業證書"></div>
 <!-- ============ 燈箱（卡片） ============ -->
 <div id="lightbox" style="display:none" role="dialog" aria-modal="true">
   <div class="box card p-5 md:p-7 bg-[#fbf7ee]">
@@ -475,7 +566,7 @@ const SND = (() => {
   }
   const PENTA = [293.7, 329.6, 392, 440, 523.3, 587.3]; // 五聲音階（似古琴泛音）
   return {
-    unlock: ac,
+    wake: ac,
     get muted(){ return muted; },
     setMuted(m){ muted = m; localStorage.setItem('xjx-muted', m ? '1':'0'); },
     click(){ tone(880, 0.09, 'sine', 0.08, 620); },                       // 木魚般輕敲
@@ -487,6 +578,9 @@ const SND = (() => {
     whoosh(){ noise(0.5, 0.05, 700, 0.6); },
     right(){ tone(523.3, 0.5, 'triangle', 0.09); tone(784, 0.7, 'triangle', 0.08, null, 0.12); },
     wrong(){ tone(196, 0.45, 'sawtooth', 0.04, 150); },
+    stamp(){ noise(0.16, 0.5, 140, 0.7); tone(110, 0.22, 'sine', 0.12, 70); },
+    unlock(){ [392, 440, 523.3, 587.3, 784].forEach((f,i) => tone(f, 0.7, 'triangle', 0.07, null, i * 0.09)); },
+    fanfare(){ [523.3, 659.3, 784, 1046.5].forEach((f,i) => tone(f, 0.8, 'triangle', 0.08, null, i * 0.12)); },
     bark(){ tone(520, 0.12, 'square', 0.03, 260); tone(480, 0.12, 'square', 0.03, 240, 0.18); },
   };
 })();
@@ -504,9 +598,9 @@ const X3 = () => (APP.ready3d && window.XJ3D) ? window.XJ3D : null;
 /* ---------- 燈箱卡片 ---------- */
 function openCard(key){
   if (!key) return;
-  if (key.startsWith('stage:')) { setStage(+key.split(':')[1], true); document.getElementById('timeline').scrollIntoView({behavior:'smooth'}); return; }
+  if (key.startsWith('stage:')) { setStage(+key.split(':')[1], true); switchTab('explore'); scrollToEl($('#timeline')); return; }
   const h = HOT[key]; if (!h) return;
-  APP.current = key; SND.open();
+  APP.current = key; SND.open(); PROG.mark('hot', key); if (key === 'passage') PROG.flag('steps');
   $('#lbTitle').textContent = h.t;
   $('#lbSeal').textContent = h.tag === '推測' ? '推測' : '原文';
   $('#lbTag').innerHTML = h.tag === '推測' ? '<span class="chip tag-guess">位置依常例推測，非原文明載</span>' : '<span class="chip tag-text">有原文依據</span>';
@@ -584,7 +678,7 @@ function setStage(i, sound){
   const bl = $('#bLoq'); if (bl) bl.setAttribute('r', Math.max(0.12, st.s.loquat*1.5));
   $$('#mPart, #bPart').forEach(g => g.style.display = st.s.partition === 'none' ? 'none' : 'inline');
   $$('#mPart path, #bPart path').forEach(p => p.setAttribute('stroke-dasharray', st.s.partition === 'fence' ? '.4 .3' : ''));
-  if (sound) SND.pluck(APP.stage);
+  if (sound) { SND.pluck(APP.stage); PROG.mark('stages', APP.stage); }
   if (X3()) X3().applyStage(st);
 }
 let tlTimer = null;
@@ -650,66 +744,430 @@ function buildAcc(){
   box.innerHTML = ACC.map((a,i) => `<div class="card"><button class="acc-btn" data-i="${i}"><span>${a.t}</span><span class="arr">▾</span></button><div class="acc-panel" id="accP${i}" style="display:none">${a.h()}</div></div>`).join('');
   $$('.acc-btn', box).forEach(b => b.addEventListener('click', () => {
     const p = $('#accP'+b.dataset.i), open = p.style.display !== 'none';
-    p.style.display = open ? 'none' : 'block'; b.querySelector('.arr').style.transform = open ? '' : 'rotate(180deg)'; SND.click();
+    p.style.display = open ? 'none' : 'block'; b.querySelector('.arr').style.transform = open ? '' : 'rotate(180deg)'; SND.click(); if (!open) PROG.mark('acc', +b.dataset.i);
   }));
-  ACC.forEach((a,i) => { if (a.open) { $('#accP'+i).style.display='block'; $$('.acc-btn',box)[i].querySelector('.arr').style.transform='rotate(180deg)'; } });
+  ACC.forEach((a,i) => { if (a.open) { if (!P.acc.includes(i)) { P.acc.push(i); saveProg(); } $('#accP'+i).style.display='block'; $$('.acc-btn',box)[i].querySelector('.arr').style.transform='rotate(180deg)'; } });
   $$('.seg.k', box).forEach(s => s.addEventListener('click', () => openCard(s.dataset.k)));
 }
 
 /* =========================================================
-   六、測驗（學測／分科測驗風格）
+   六、學習進度（存在 localStorage；失敗時改用記憶體）
+   參考「家庭教育研習互動網頁」的證書流程，改良為：進度追蹤＋印章＋分關測驗
 ========================================================= */
-const QUIZ = [
-  {q:'關於項脊軒修葺後「室始洞然」的原因，下列敘述何者最符合文意？',
-   o:['拆除北牆、改為朝南開門，使陽光直射入室','在軒前開四扇窗，並於庭院四周築牆承接南面日光，使光線經牆面反射入室','在屋頂開設天窗，讓正午陽光自上而下照入','砍除庭中蘭桂竹木，使陽光不再受到遮蔽'],
-   a:[1], ex:'「前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然」：軒北向得不到直射日光，靠牆面「反照」採光。（可在 3D 模型拖動時刻滑桿觀察金色光點路徑）', key:'window'},
-  {q:'「庭中始為籬，已為牆，凡再變矣」一句，最主要反映何種現象？',
-   o:['歸家為防竊盜而加強門禁','家族分居後，原本相通的庭院被層層分隔，暗示親情疏離、家道衰落','作者為求讀書清靜而自行築牆','庭院荒蕪，以籬牆防止雞犬踐踏花木'],
-   a:[1], ex:'承「迨諸父異爨，內外多置小門牆」而來；由「通南北為一」到籬、到牆，空間的分割即家族的分裂。', key:'partition'},
-  {q:'下列文句，何者最能體現「以聲寫靜」的手法？',
-   o:['東犬西吠，客踰庖而宴','借書滿架，偃仰嘯歌，冥然兀坐，萬籟有聲','三五之夜，明月半牆，桂影斑駁','百年老屋，塵泥滲漉，雨澤下注'],
-   a:[1], ex:'能聽見「萬籟有聲」，正因四周極靜、作者心靜。(A) 寫分家後的雜亂；(C) 以視覺寫景；(D) 寫老屋破敗。', key:'shelf'},
-  {q:'「庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣」作為全文結尾，其藝術效果的說明，何者最適切？',
-   o:['直抒胸臆，痛陳喪妻之悲','借樹木成長寫時間流逝，物在人亡，以景結情，含蓄深沉','以枇杷果實甘美，象徵夫妻生活美滿','呼應首段「雜植蘭桂竹木」，說明庭院日漸繁茂、家道中興'],
-   a:[1], ex:'不直言悲傷，而以樹之「亭亭如蓋」暗示歲月漫長、人亡已久——以景結情、物是人非。', key:'loquat'},
-  {q:'若要依〈項脊軒志〉畫出宅院平面圖，下列哪一項「無法」從原文直接得知，只能推測？',
-   o:['軒的東邊過去曾是廚房，往來者要從軒前經過','軒的西邊與內室（中閨）相連','軒的門窗原本朝北，因此不易得到日照','歸家的大門開在宅院東側'],
-   a:[3], ex:'(A)「軒東故嘗為廚，人往，從軒前過」；(B)「室西連於中閨」；(C)「又北向，不能得日」。大門位置原文未載——本模型標為「推測」。', key:'gate'},
-  {q:'（多選）關於本文的章法與情感，下列敘述哪些正確？',
-   o:['首段寫軒的修葺與景致，情調以「喜」為主','「然余居於此，多可喜，亦多可悲」承上啟下，轉入悲情','文中追憶的大母、先妣、亡妻，形象皆藉老嫗轉述呈現','「軒凡四遭火，得不焚，殆有神護者」流露作者對此軒的珍視','補記以小妹「何謂閣子」之問，側寫夫妻間的親暱'],
-   a:[0,1,3,4], multi:true, ex:'(C) 錯：只有先妣藉老嫗轉述；大母是作者親身記憶，亡妻則由作者自述與小妹問語呈現。', key:null},
+const STORE_KEY = 'xjx-progress-v1';
+const store = {
+  get(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || null; } catch(e){ return null; } },
+  set(v){ try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); } catch(e){ /* 隱私模式等：只存在記憶體 */ } },
+  clear(){ try { localStorage.removeItem(STORE_KEY); } catch(e){} },
+};
+const blankProg = () => ({ hot:[], stages:[], acc:[], flags:{}, seals:[],
+  levels:{1:{best:0,passed:false,tries:0},2:{best:0,passed:false,tries:0},3:{best:0,passed:false,tries:0}},
+  info:{name:'',cls:'',seat:'',teacher:''}, certNo:'', certAt:'' });
+function loadProg(){
+  const b = blankProg(), s = store.get(); if (!s) return b;
+  return Object.assign(b, s, { flags:Object.assign({}, s.flags), levels:Object.assign(b.levels, s.levels), info:Object.assign(b.info, s.info) });
+}
+let P = loadProg();
+const saveProg = () => store.set(P);
+
+/* 印章（徽章）：達成條件 */
+const BADGES = [
+  {id:'deng', t:'登軒', d:'使用「進入軒內」鏡頭，走進方丈小室', test:p => !!p.flags.inside},
+  {id:'dong', t:'洞然', d:'比較「修葺前」與「修葺後」', test:p => p.flags.before && p.flags.after},
+  {id:'yue',  t:'半牆', d:'開啟「三五之夜」，看明月半牆', test:p => !!p.flags.night},
+  {id:'zu',   t:'足音', d:'在軒前聽一次足音', test:p => !!p.flags.steps},
+  {id:'bian', t:'再變', d:'時間軸九個階段全部看過', test:p => p.stages.length >= 9},
+  {id:'xun',  t:'尋幽', d:'開啟 12 張以上原文卡片', test:p => p.hot.length >= 12},
+  {id:'du',   t:'研讀', d:'「文本研讀」七個單元全部展開', test:p => p.acc.length >= 7},
+  {id:'guan', t:'三關', d:'通過三道闖關測驗', test:p => [1,2,3].every(l => p.levels[l].passed)},
+  {id:'man',  t:'滿分', d:'任一關卡 5 題全對', test:p => [1,2,3].some(l => p.levels[l].best >= 5)},
 ];
-const quizState = QUIZ.map(() => ({sel:[], done:false, ok:false}));
-function renderQuiz(){
-  $('#quizBox').innerHTML = QUIZ.map((x,i) => `
-    <div class="card p-4" id="qz${i}">
-      <p class="font-bold leading-8">${i+1}. ${x.q}</p>
-      ${x.o.map((o,j) => `<button class="opt" data-i="${i}" data-j="${j}">(${'ABCDE'[j]}) ${o}</button>`).join('')}
-      ${x.multi ? `<button class="btn btn-zhu mt-2" data-submit="${i}">送出答案</button>` : ''}
-      <div class="fb mt-3 leading-8" style="display:none"></div>
-    </div>`).join('');
-  $$('.opt').forEach(b => b.addEventListener('click', () => {
-    const i = +b.dataset.i, j = +b.dataset.j, st = quizState[i]; if (st.done) return;
-    if (QUIZ[i].multi) { st.sel = st.sel.includes(j) ? st.sel.filter(v=>v!==j) : [...st.sel, j]; b.classList.toggle('sel'); SND.click(); }
-    else { st.sel = [j]; gradeQ(i); }
-  }));
-  $$('[data-submit]').forEach(b => b.addEventListener('click', () => gradeQ(+b.dataset.submit)));
-  updateScore();
+const sealHTML = (t, on, big) => `<div class="stamp ${on ? 'on' : ''} ${big ? 'big' : ''}"><span>${t[0]}<br>${t[1]}</span></div>`;
+
+const PROG = {
+  total(){ return { h:HOT_KEYS.length, s:STAGES.length, a:ACC.length, l:3 }; },
+  pct(){
+    const T = this.total(), lp = [1,2,3].filter(l => P.levels[l].passed).length;
+    return Math.round(100 * (0.3 * P.hot.length / T.h + 0.15 * P.stages.length / T.s + 0.15 * P.acc.length / T.a + 0.4 * lp / 3));
+  },
+  mark(kind, v){ if (!P[kind].includes(v)) { P[kind].push(v); saveProg(); this.check(); this.render(); } },
+  flag(f){ if (!P.flags[f]) { P.flags[f] = true; saveProg(); this.check(); this.render(); } },
+  check(){
+    BADGES.forEach(b => { if (!P.seals.includes(b.id) && b.test(P)) { P.seals.push(b.id); saveProg(); announceSeal(b); } });
+  },
+  render(){
+    $('#progPct').textContent = this.pct() + '%';
+    $('#progSeals').textContent = P.seals.length;
+    if (APP.tab === 'cert') renderRecord();
+    renderSealStrip();
+  },
+};
+/* 獲得印章：蓋章動畫（佇列，避免重疊） */
+let sealQueue = [], sealBusy = false;
+function announceSeal(b){ sealQueue.push(b); if (!sealBusy) nextSeal(); }
+function nextSeal(){
+  const b = sealQueue.shift(), box = $('#sealToast'); if (!b) { sealBusy = false; return; }
+  sealBusy = true;
+  box.innerHTML = `${sealHTML(b.t, true, true)}<div><p class="text-[var(--zhu)] text-sm tracking-widest">獲得印章</p><p class="text-xl font-black">「${b.t}」</p><p class="text-sm text-[var(--ink2)]">${b.d}</p></div>`;
+  box.style.display = 'flex'; box.style.animation = 'none'; void box.offsetWidth; box.style.animation = 'toastIn .35s ease';
+  SND.unlock(); setTimeout(() => SND.stamp(), 380);
+  setTimeout(() => { box.style.display = 'none'; nextSeal(); }, 2600);
 }
-function gradeQ(i){
-  const x = QUIZ[i], st = quizState[i]; st.done = true;
-  st.ok = st.sel.length === x.a.length && x.a.every(v => st.sel.includes(v));
-  $$(`#qz${i} .opt`).forEach((b,j) => { if (x.a.includes(j)) b.classList.add('right'); else if (st.sel.includes(j)) b.classList.add('wrong'); });
-  const fb = $(`#qz${i} .fb`);
-  fb.innerHTML = `<b style="color:${st.ok?'#3f7a45':'#a8322a'}">${st.ok?'✔ 答對了！':'✘ 再想想。'}</b> 正解：${x.a.map(v=>'ABCDE'[v]).join('')}。${x.ex}` + (x.key ? ` <button class="btn mt-1" data-goto="${x.key}">🔎 在模型中查看</button>` : '');
-  show(fb); st.ok ? SND.right() : SND.wrong();
-  const g = fb.querySelector('[data-goto]'); if (g) g.addEventListener('click', () => { document.getElementById('model').scrollIntoView({behavior:'smooth'}); setTimeout(() => openCard(g.dataset.goto), 500); });
-  updateScore();
+function renderSealStrip(){
+  const el = $('#sealStrip'); if (!el) return;
+  el.innerHTML = BADGES.map(b => `<div class="text-center" title="${b.d}">${sealHTML(b.t, P.seals.includes(b.id))}<p class="text-[11px] mt-1 text-[var(--ink2)]">${b.t}</p></div>`).join('');
 }
-function updateScore(){ const d = quizState.filter(s=>s.done).length, ok = quizState.filter(s=>s.ok).length; $('#quizScore').textContent = d ? `得分 ${ok} / ${QUIZ.length}` : ''; }
 
 /* =========================================================
-   七、初始化（不依賴 3D；3D 失敗時仍可使用）
+   七、闖關測驗：三關 × 隨機抽題（學測／分科測驗風格）
+========================================================= */
+const LEVELS = {
+  1:{name:'初入南閣', sub:'字義・文意', icon:'🏚'},
+  2:{name:'庭中再變', sub:'修辭・章法', icon:'🧱'},
+  3:{name:'亭亭如蓋', sub:'空間・情感・綜合', icon:'🌳'},
+};
+const DRAW = 5, PASS = 4; // 每關抽 5 題，答對 4 題（80%）過關
+const QBANK = [
+  // ---- 第一關：字義・文意 ----
+  {lv:1, tag:'字義', q:'「室僅方丈，可容一人居」中「方丈」的意思是：', o:['一丈見方，形容居室狹小','寺院住持居住的地方','一丈長的方形書桌','方正寬敞的廳堂'], a:[0], ex:'「方丈」指一丈見方；明代一丈約 3.1–3.2 公尺，面積不到 10 平方公尺，故「可容一人居」。', key:'xuan'},
+  {lv:1, tag:'字義', q:'「迨諸父異爨」中「異爨」的意思是：', o:['分家後各自開伙','在不同的廚房宴客','輪流掌管家中廚房','各房舉行不同的祭祀'], a:[0], ex:'「爨」是燒火煮飯，「異爨」即分灶吃飯，也就是分家。', key:'partition'},
+  {lv:1, tag:'文意', q:'「客踰庖而宴」最能說明下列何種情況？', o:['分家後格局雜亂，客人須穿越廚房才能赴宴','客人喜歡到廚房品嘗菜餚','家中宴客奢華，廚房不敷使用','主人刻意帶客人參觀廚房'], a:[0], ex:'分家後到處設小門牆，動線被切割，客人只好穿過廚房（庖）去赴宴，寫出家族離散後的混亂。', key:'partition'},
+  {lv:1, tag:'字義', q:'「余扃牖而居，久之，能以足音辨人」中「扃牖」的意思是：', o:['關上窗戶','推開門窗','倚靠窗邊','修補窗紙'], a:[0], ex:'「扃」是關閉，「牖」是窗戶。關窗苦讀，久了竟能憑腳步聲辨人。', key:'passage'},
+  {lv:1, tag:'字義', q:'「吾妻來歸」與「吾妻歸寧」兩句中的「歸」，意思依序為：', o:['女子出嫁／回娘家探望父母','回娘家／女子出嫁','去世／回家','回到軒中／出門遠行'], a:[0], ex:'古代女子出嫁稱「歸」；「歸寧」指已嫁女子回娘家問候父母。', key:'desk'},
+  {lv:1, tag:'字義', q:'「三五之夜，明月半牆」中「三五之夜」指的是：', o:['農曆十五日的夜晚','三更至五更的深夜','三月五日的夜晚','三五好友相聚之夜'], a:[0], ex:'三乘五為十五，「三五之夜」即農曆十五月圓之夜。', key:'gui'},
+  {lv:1, tag:'字義', q:'「日影反照，室始洞然」中「洞然」的意思是：', o:['明亮的樣子','空洞寂寥的樣子','屋頂破洞的樣子','深遠幽暗的樣子'], a:[0], ex:'修葺後陽光經牆面反射入室，屋內「洞然」明亮，與前文「日過午已昏」形成對比。', key:'window'},
+  {lv:1, tag:'文意', q:'祖母說「何竟日默默在此，大類女郎也」，這句話主要流露何種情感？', o:['略帶嗔怪的疼惜與關懷','嚴厲的斥責與不滿','對孫兒的嘲笑與輕視','對讀書一事的漠不關心'], a:[0], ex:'看似責怪孫兒整天悶在屋裡像女孩子，其實是心疼；接著「以手闔門」「持一象笏至」更見期望之深。', key:'door'},
+  // ---- 第二關：修辭・章法 ----
+  {lv:2, tag:'修辭', q:'下列文句，何者最能體現「以聲寫靜」的手法？', o:['借書滿架，偃仰嘯歌，冥然兀坐，萬籟有聲','東犬西吠，客踰庖而宴，雞棲於廳','三五之夜，明月半牆，桂影斑駁','百年老屋，塵泥滲漉，雨澤下注'], a:[0], ex:'能聽見「萬籟有聲」，正因四周極靜、作者心靜。「東犬西吠」寫分家後的雜亂；「明月半牆」以視覺寫景；「塵泥滲漉」寫老屋破敗。', key:'shelf'},
+  {lv:2, tag:'章法', q:'「然余居於此，多可喜，亦多可悲」一句在全文章法上的作用是：', o:['承上啟下，由「喜」轉入「悲」','總結全文，點明主旨','開門見山，交代軒名由來','呼應結尾的枇杷樹'], a:[0], ex:'上承首段修葺後的可喜之景，下啟家族分裂、懷念親人的可悲之事，是全文情感的分水嶺。', key:null},
+  {lv:2, tag:'修辭', q:'「而庭階寂寂，小鳥時來啄食，人至不去」主要運用何種手法？', o:['以動襯靜','誇飾','借代','層遞'], a:[0], ex:'小鳥啄食、人至不去是「動」，反襯庭院之幽靜，也暗示作者久坐不動、物我兩忘。', key:'court'},
+  {lv:2, tag:'修辭', q:'「庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣」作為結尾，其藝術效果最適切的說明是：', o:['借樹木成長寫時間流逝，物在人亡，以景結情','直抒胸臆，痛陳喪妻之悲','以枇杷果實甘美，象徵夫妻生活美滿','說明庭院日漸繁茂，家道中興'], a:[0], ex:'不直言悲傷，而以樹之「亭亭如蓋」暗示歲月漫長、人亡已久——以景結情、物是人非，含蓄深沉。', key:'loquat'},
+  {lv:2, tag:'寫作手法', q:'文中關於先妣（亡母）的形象，主要透過何種方式呈現？', o:['藉老嫗轉述的側面描寫','作者親身回憶的正面描寫','先妣留下的書信自述','鄰里傳聞的間接評論'], a:[0], ex:'作者幼年喪母，母親「以指叩門扉」的身影全由老嫗轉述，語未畢「余泣，嫗亦泣」。', key:'zhonggui'},
+  {lv:2, tag:'寫作手法', q:'「比去，以手闔門」「頃之，持一象笏至」這類描寫，屬於何種手法？', o:['以動作細節傳達人物情感','以環境描寫烘托氣氛','以心理獨白剖析人物','以誇張渲染製造衝突'], a:[0], ex:'關門怕擾孫兒讀書、持象笏寄託家族期望，小動作見深情，是歸有光散文的特色。', key:'door'},
+  {lv:2, tag:'章法', q:'「項脊生曰」一段自比蜀清、諸葛孔明，主要用意為何？', o:['表明自己雖處敗屋，仍懷抱遠大志向','炫耀家族的財富與名望','批評秦始皇與劉備用人不當','說明「項脊軒」名稱的由來'], a:[0], ex:'蜀清守丹穴、孔明起隴中，都曾「昧昧於一隅」；作者以此自況，帶有少年的自負與自嘲（埳井之蛙）。', key:null},
+  {lv:2, tag:'文意', q:'補記「其制稍異於前」「然自後余多在外，不常居」兩句，最能傳達何種意涵？', o:['屋雖重修，人事已非，流露落寞之情','作者對新屋格局十分不滿','作者已搬到更好的住所','強調修繕技術的進步'], a:[0], ex:'妻亡後重修小閣，形制已變，人也不常居，空間的改變正映照心境的失落。', key:null, stage:7},
+  // ---- 第三關：空間・情感・綜合 ----
+  {lv:3, tag:'空間', q:'關於項脊軒修葺後「室始洞然」的原因，下列敘述何者最符合文意？', o:['在軒前開四扇窗，並在庭院四周築牆承接南面日光，使光線經牆面反射入室','拆除北牆、改為朝南開門，使陽光直射入室','在屋頂開設天窗，讓正午陽光自上而下照入','砍除庭中蘭桂竹木，使陽光不再受遮蔽'], a:[0], ex:'「前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然」：軒北向得不到直射日光，靠牆面「反照」採光。到 3D 模型拖動時刻滑桿，看金色光點路徑。', key:'window'},
+  {lv:3, tag:'空間情感', q:'「庭中始為籬，已為牆，凡再變矣」一句，最主要反映何種現象？', o:['家族分居後，原本相通的庭院被層層分隔，暗示親情疏離、家道衰落','歸家為防竊盜而加強門禁','作者為求讀書清靜而自行築牆','庭院荒蕪，以籬牆防止雞犬踐踏花木'], a:[0], ex:'承「迨諸父異爨，內外多置小門牆」而來；由「通南北為一」到籬、到牆，空間的分割即家族的分裂。', key:'partition'},
+  {lv:3, tag:'空間', q:'若要依〈項脊軒志〉畫出宅院平面圖，下列哪一項「無法」從原文直接得知，只能推測？', o:['歸家大門開在宅院東側','軒的東邊過去曾是廚房，往來者要從軒前經過','軒的西邊與內室（中閨）相連','軒的門窗原本朝北，因此不易得到日照'], a:[0], ex:'「軒東故嘗為廚」「室西連於中閨」「又北向，不能得日」皆有原文；大門位置原文未載——本模型標為「推測」。', key:'gate'},
+  {lv:3, tag:'空間', q:'下列對「三五之夜，明月半牆」的說明，何者最合理？', o:['月光斜照入庭，只照亮了半面牆壁','圍牆只砌了一半高度','月亮被雲遮住了一半','半面牆壁已經倒塌'], a:[0], ex:'月光斜照，牆的一部分落在陰影中，只有半面牆被照亮。本模型推測：軒的屋頂遮去牆的下半，切換「三五之夜」可驗證。', key:'yuanqiang'},
+  {lv:3, tag:'空間情感', q:'「室西連於中閨」與「娘以指叩門扉曰：『兒寒乎？欲食乎？』吾從板外相為應答」，空間與情感的關係何者最適切？', o:['一門之隔傳來母親的關愛，反襯作者與母親永遠無法重逢','中閨與軒相距甚遠，可見母子關係疏離','母親常到軒中陪伴作者讀書','門扉的精美象徵家族的富貴'], a:[0], ex:'空間上僅一門之隔，人事上卻是生死永隔；而且原文說「先妣嘗一至」，只來過一次。', key:'zhonggui'},
+  {lv:3, tag:'文意', q:'「軒東故嘗為廚，人往，從軒前過。余扃牖而居，久之，能以足音辨人」，由此可推知：', o:['作者長期在軒中專心讀書，對家人的往來十分熟悉','作者常開窗觀察往來行人','廚房後來搬進了項脊軒','軒位於宅院正中央，四面皆有通道'], a:[0], ex:'關窗而居仍能「以足音辨人」，可見久居、專注，也見他與家人生活的貼近。按「👣 聽足音」體驗。', key:'passage'},
+  {lv:3, tag:'多選・章法情感', multi:true, q:'（多選）關於本文的章法與情感，下列敘述哪些正確？', o:['首段寫軒的修葺與景致，情調以「喜」為主','「然余居於此，多可喜，亦多可悲」承上啟下，轉入悲情','「軒凡四遭火，得不焚，殆有神護者」流露作者對此軒的珍視','補記以小妹「何謂閣子」之問，側寫夫妻間的親暱','文中追憶的大母、先妣、亡妻，形象皆藉老嫗轉述呈現'], a:[0,1,2,3], ex:'只有先妣藉老嫗轉述；大母是作者親身記憶，亡妻由作者自述與小妹問語呈現，故「皆藉老嫗轉述」錯誤。', key:null},
+];
+const shuffle = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+let QZ = null; // 目前關卡狀態
+
+function renderLevels(){
+  const box = $('#lvGrid'); if (!box) return;
+  $('#lvPassed').textContent = `已過關 ${[1,2,3].filter(l => P.levels[l].passed).length} / 3`;
+  box.innerHTML = [1,2,3].map(l => {
+    const L = LEVELS[l], st = P.levels[l], open = l === 1 || P.levels[l-1].passed, n = QBANK.filter(q => q.lv === l).length;
+    return `<div class="card p-4 flex flex-col gap-2 ${open ? '' : 'opacity-60'}">
+      <div class="flex items-center gap-3"><span class="text-3xl">${open ? L.icon : '🔒'}</span>
+        <div><p class="text-xs text-[var(--zhu)] tracking-widest">第 ${l} 關・${L.sub}</p><h3 class="text-xl font-black">${L.name}</h3></div>
+        <div class="ml-auto">${st.passed ? sealHTML(['過','關'], true) : ''}</div></div>
+      <p class="text-sm text-[var(--ink2)]">題庫 ${n} 題，隨機抽 ${DRAW} 題；答對 ${PASS} 題過關。</p>
+      <p class="text-sm">最佳成績：<b>${st.best} / ${DRAW}</b>　挑戰次數：${st.tries}</p>
+      <button class="btn ${open ? 'btn-zhu' : ''} mt-auto justify-center" data-lv="${l}" ${open ? '' : 'disabled'}>${open ? (st.tries ? '↻ 再次挑戰' : '▶ 開始闖關') : `通過第 ${l-1} 關後解鎖`}</button>
+    </div>`;
+  }).join('');
+  $$('[data-lv]', box).forEach(b => b.addEventListener('click', () => startLevel(+b.dataset.lv)));
+}
+function startLevel(lv){
+  const pool = shuffle(QBANK.filter(q => q.lv === lv)).slice(0, DRAW);
+  QZ = { lv, i:0, items: pool.map(src => { const perm = shuffle(src.o.map((_, k) => k)); return { src, perm, sel:[], done:false, ok:false }; }) };
+  hide($('#lvGrid')); hide($('#quizResult')); show($('#quizPlay'));
+  SND.pluck(lv); renderQ(); scrollToEl($('#tab-quiz'));
+}
+function renderQ(){
+  const it = QZ.items[QZ.i], q = it.src, L = LEVELS[QZ.lv];
+  $('#quizPlay').innerHTML = `
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+      <span class="chip tag-guess">第 ${QZ.lv} 關・${L.name}</span><span class="chip tag-text">${q.tag}</span>
+      <span class="ml-auto text-sm">第 ${QZ.i+1} / ${DRAW} 題</span>
+      <button class="btn" id="qQuit">↩ 返回關卡</button></div>
+    <div class="flex gap-1 mb-4">${QZ.items.map((x,k) => `<i class="qdot" style="background:${x.done ? (x.ok ? '#3f7a45' : '#a8322a') : (k === QZ.i ? '#2b2622' : '#d8cbb0')}"></i>`).join('')}</div>
+    <div class="card p-4 md:p-5 qcard">
+      <p class="font-bold text-lg leading-9">${q.q}</p>
+      ${it.perm.map((k, j) => `<button class="opt ${it.sel.includes(j) ? 'sel' : ''}" data-j="${j}">(${'ABCDE'[j]}) ${q.o[k]}</button>`).join('')}
+      ${q.multi ? `<button class="btn btn-zhu mt-2" id="qSubmit">送出答案</button>` : ''}
+      <div id="qFb" class="mt-3 leading-8" style="display:none"></div>
+      <div class="mt-3 flex flex-wrap gap-2" id="qNav" style="display:none">
+        ${q.key || q.stage != null ? `<button class="btn" id="qGoto">🔎 在模型中查看</button>` : ''}
+        <button class="btn btn-zhu" id="qNext">${QZ.i < DRAW - 1 ? '下一題 ▶' : '看結果 ✦'}</button></div>
+    </div>`;
+  $('#qQuit').addEventListener('click', () => { QZ = null; hide($('#quizPlay')); show($('#lvGrid')); renderLevels(); });
+  $$('#quizPlay .opt').forEach(b => b.addEventListener('click', () => {
+    if (it.done) return; const j = +b.dataset.j;
+    if (q.multi) { it.sel = it.sel.includes(j) ? it.sel.filter(v => v !== j) : [...it.sel, j]; b.classList.toggle('sel'); SND.click(); }
+    else { it.sel = [j]; gradeItem(); }
+  }));
+  const sb = $('#qSubmit'); if (sb) sb.addEventListener('click', () => { if (!it.sel.length) return; gradeItem(); });
+}
+function gradeItem(){
+  const it = QZ.items[QZ.i], q = it.src; it.done = true;
+  const right = it.perm.map((k, j) => q.a.includes(k) ? j : -1).filter(j => j >= 0);
+  it.ok = it.sel.length === right.length && right.every(j => it.sel.includes(j));
+  $$('#quizPlay .opt').forEach((b, j) => { if (right.includes(j)) b.classList.add('right'); else if (it.sel.includes(j)) b.classList.add('wrong'); b.disabled = true; });
+  const fb = $('#qFb');
+  fb.innerHTML = `<b style="color:${it.ok ? '#3f7a45' : '#a8322a'}">${it.ok ? '✔ 答對了！' : '✘ 答錯了。'}</b> 正解：${right.map(j => 'ABCDE'[j]).join('')}。<br>${q.ex}`;
+  show(fb); show($('#qNav'), 'flex'); hide($('#qSubmit'));
+  it.ok ? SND.right() : SND.wrong();
+  $$('#quizPlay .qdot')[QZ.i].style.background = it.ok ? '#3f7a45' : '#a8322a';
+  $('#qNext').addEventListener('click', () => { if (QZ.i < DRAW - 1) { QZ.i++; renderQ(); } else finishLevel(); });
+  const g = $('#qGoto'); if (g) g.addEventListener('click', () => gotoModel(q.key, q.stage));
+}
+function finishLevel(){
+  const lv = QZ.lv, score = QZ.items.filter(x => x.ok).length, st = P.levels[lv], pass = score >= PASS;
+  const wasPassed = st.passed;
+  st.tries++; st.best = Math.max(st.best, score); if (pass) st.passed = true;
+  if (!P.certNo && [1,2,3].every(l => P.levels[l].passed)) { const d = new Date(); P.certNo = `XJX-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.random().toString(36).slice(2,6).toUpperCase()}`; P.certAt = d.toISOString(); }
+  saveProg();
+  const allPass = [1,2,3].every(l => P.levels[l].passed);
+  $('#lvPassed').textContent = `已過關 ${[1,2,3].filter(l => P.levels[l].passed).length} / 3`;
+  hide($('#quizPlay')); show($('#quizResult'));
+  $('#quizResult').innerHTML = `
+    <div class="card p-5 md:p-7 text-center">
+      <div class="flex justify-center mb-2"><div class="press">${sealHTML(pass ? ['過','關'] : ['再','試'], true, true)}</div></div>
+      <p class="text-sm tracking-widest text-[var(--zhu)]">第 ${lv} 關・${LEVELS[lv].name}</p>
+      <h3 class="text-3xl font-black mt-1">${score} / ${DRAW}</h3>
+      <p class="mt-2">${pass ? (score === DRAW ? '全對！「室始洞然」，一點就通。' : '過關！已蓋上關印。') : `還差 ${PASS - score} 題就過關，回模型找找線索再挑戰吧！`}</p>
+      ${pass && !wasPassed && lv < 3 ? `<p class="mt-1 text-[var(--zhu)] font-bold">🔓 第 ${lv+1} 關「${LEVELS[lv+1].name}」已解鎖！</p>` : ''}
+      ${allPass ? `<p class="mt-1 text-[var(--zhu)] font-bold">🎓 三關全數通過，「我的證書」已解鎖！</p>` : ''}
+      <div class="text-left mt-4 grid gap-2">${QZ.items.map((x,k) => `<div class="text-sm leading-7 border-b border-dashed border-[#d8cbb0] pb-2">${x.ok ? '✔' : '✘'} ${k+1}. ${x.src.q}</div>`).join('')}</div>
+      <div class="mt-5 flex flex-wrap justify-center gap-2">
+        <button class="btn" data-act="retry">↻ 再挑戰本關</button>
+        ${pass && lv < 3 ? `<button class="btn btn-zhu" data-act="next">下一關 ▶</button>` : ''}
+        ${allPass ? `<button class="btn btn-zhu" data-act="cert">🎓 前往我的證書</button>` : ''}
+        <button class="btn" data-act="menu">☰ 關卡選單</button></div>
+    </div>`;
+  $$('#quizResult [data-act]').forEach(b => b.addEventListener('click', () => {
+    const a = b.dataset.act;
+    if (a === 'retry') startLevel(lv); else if (a === 'next') startLevel(lv + 1); else if (a === 'cert') switchTab('cert');
+    else { hide($('#quizResult')); show($('#lvGrid')); renderLevels(); }
+  }));
+  if (pass) { SND.fanfare(); setTimeout(() => SND.stamp(), 450); } else SND.wrong();
+  if (allPass && !wasPassed && lv === 3) setTimeout(() => SND.unlock(), 900);
+  PROG.check(); PROG.render(); scrollToEl($('#tab-quiz'));
+}
+function gotoModel(key, stage){
+  switchTab('explore');
+  setTimeout(() => {
+    if (stage != null) { setStage(stage, true); scrollToEl($('#timeline')); }
+    else { scrollToEl($('#model')); if (key) openCard(key); }
+  }, 350);
+}
+
+/* =========================================================
+   八、我的證書：學習紀錄、印章牆、Canvas 證書（PNG 下載／列印／分享）
+========================================================= */
+const certUnlocked = () => [1,2,3].every(l => P.levels[l].passed);
+const certScore = () => Math.round(([1,2,3].reduce((s,l) => s + P.levels[l].best, 0)) / (DRAW * 3) * 100);
+const certGrade = s => s >= 100 ? '亭亭如蓋' : (s >= 90 ? '室始洞然' : '珊珊可愛');
+function renderRecord(){
+  const T = PROG.total(), lp = [1,2,3].filter(l => P.levels[l].passed).length;
+  const bar = (label, n, t) => `<div><div class="flex justify-between text-sm"><span>${label}</span><b>${n} / ${t}</b></div><div class="meter mt-1"><i style="width:${Math.round(100*n/t)}%"></i></div></div>`;
+  $('#recordPanel').innerHTML = `
+    <div class="grid md:grid-cols-[1fr_1.2fr] gap-6">
+      <div class="grid gap-3">
+        <div class="flex items-end gap-2"><span class="text-5xl font-black text-[var(--zhu)]">${PROG.pct()}%</span><span class="pb-2 text-[var(--ink2)]">整體學習進度</span></div>
+        ${bar('🏯 原文熱點卡片', P.hot.length, T.h)}${bar('⏳ 時間軸階段', P.stages.length, T.s)}${bar('📜 文本研讀單元', P.acc.length, T.a)}${bar('✍ 闖關測驗', lp, 3)}
+        <p class="text-xs text-[var(--ink2)]">紀錄存在這台裝置的瀏覽器中（localStorage），換裝置或清除瀏覽資料會重新開始。</p>
+      </div>
+      <div><h3 class="font-bold mb-2">印章冊（${P.seals.length} / ${BADGES.length}）</h3>
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">${BADGES.map(b => `<div class="text-center">${sealHTML(b.t, P.seals.includes(b.id))}<p class="text-[11.5px] leading-4 mt-1 ${P.seals.includes(b.id) ? '' : 'text-[var(--ink2)]'}">${b.d}</p></div>`).join('')}</div></div>
+    </div>`;
+}
+function renderCert(){
+  renderRecord();
+  const ok = certUnlocked();
+  $('#certLocked').style.display = ok ? 'none' : 'block';
+  $('#certOpen').style.display = ok ? 'block' : 'none';
+  $('#certChecklist').innerHTML = [1,2,3].map(l => `<li>${P.levels[l].passed ? '✅' : '⬜'} 第 ${l} 關「${LEVELS[l].name}」${P.levels[l].passed ? `（最佳 ${P.levels[l].best}/${DRAW}）` : ''}</li>`).join('');
+  if (ok) { ['name','cls','seat','teacher'].forEach(k => { const el = $('#ci-' + k); if (el.value !== P.info[k]) el.value = P.info[k]; }); refreshCertPreview(); }
+}
+let certTimer = null, certURL = null, certBlob = null;
+function refreshCertPreview(){
+  clearTimeout(certTimer);
+  certTimer = setTimeout(async () => {
+    await certFonts();
+    const c = drawCert(certData());
+    $('#certImg').src = c.toDataURL('image/png');
+    c.toBlob(b => { certBlob = b; if (certURL) URL.revokeObjectURL(certURL); certURL = b ? URL.createObjectURL(b) : null; }, 'image/png');
+  }, 250);
+}
+function certData(){
+  const d = P.certAt ? new Date(P.certAt) : new Date(), s = certScore();
+  return { name: P.info.name.trim(), cls: P.info.cls.trim(), seat: P.info.seat.trim(), teacher: P.info.teacher.trim(), score: s, grade: certGrade(s),
+    date: `中華民國 ${d.getFullYear() - 1911} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日`, no: P.certNo || 'XJX-SAMPLE',
+    seals: BADGES.filter(b => P.seals.includes(b.id)), hot: P.hot.length, stages: P.stages.length, acc: P.acc.length };
+}
+const SERIF = '"Noto Serif TC","Noto Serif CJK TC","Source Han Serif TC","PMingLiU",serif';
+async function certFonts(){
+  try { if (document.fonts) await Promise.race([Promise.all([document.fonts.load(`900 100px "Noto Serif TC"`, '項脊軒志研讀結業證書'), document.fonts.load(`700 40px "Noto Serif TC"`, '茲證明同學')]), new Promise(r => setTimeout(r, 2500))]); } catch(e){}
+}
+// 可重現的亂數（宣紙纖維）
+function rng(seed){ return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+// 直書
+function vtext(ctx, s, x, y, size, gap = 1.12){ [...s].forEach((ch, i) => ctx.fillText(ch, x, y + i * size * gap)); }
+// 白文方印（朱底白字），chars 依「右行上→下、左行上→下」排列
+function sealSquare(ctx, cx, cy, size, chars, rot = 0, rand = Math.random){
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+  ctx.fillStyle = '#b8322a'; const h = size / 2, r = size * 0.08;
+  ctx.beginPath(); ctx.moveTo(-h + r, -h); ctx.arcTo(h, -h, h, h, r); ctx.arcTo(h, h, -h, h, r); ctx.arcTo(-h, h, -h, -h, r); ctx.arcTo(-h, -h, h, -h, r); ctx.fill();
+  ctx.fillStyle = '#fbf3e6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (chars.length === 4) {
+    const f = size * 0.36; ctx.font = `900 ${f}px ${SERIF}`;
+    [[h*0.45,-h*0.45],[h*0.45,h*0.45],[-h*0.45,-h*0.45],[-h*0.45,h*0.45]].forEach(([x,y],i) => ctx.fillText(chars[i], x, y + f*0.04));
+  } else {
+    const f = size * 0.4; ctx.font = `900 ${f}px ${SERIF}`;
+    ctx.fillText(chars[0], 0, -h * 0.42); ctx.fillText(chars[1], 0, h * 0.42);
+  }
+  // 斑駁（印泥不均）
+  ctx.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < size * 0.9; i++) { ctx.beginPath(); ctx.arc((rand()-.5)*size, (rand()-.5)*size, rand()*size*0.018, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+// 朱文方印（白底朱字、朱框）
+function sealZhu(ctx, cx, cy, size, chars, rot, rand){
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); const h = size / 2;
+  ctx.strokeStyle = ctx.fillStyle = '#b8322a'; ctx.lineWidth = size * 0.06; ctx.strokeRect(-h, -h, size, size);
+  ctx.lineWidth = size * 0.015; ctx.beginPath(); ctx.moveTo(0, -h); ctx.lineTo(0, h); ctx.stroke();
+  const f = size * 0.36; ctx.font = `900 ${f}px ${SERIF}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  [[h*0.48,-h*0.45],[h*0.48,h*0.45],[-h*0.48,-h*0.45],[-h*0.48,h*0.45]].forEach(([x,y],i) => ctx.fillText(chars[i], x, y + f*0.04));
+  ctx.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < size * 0.7; i++) { ctx.beginPath(); ctx.arc((rand()-.5)*size*1.05, (rand()-.5)*size*1.05, rand()*size*0.016, 0, 7); ctx.fill(); }
+  ctx.restore();
+}
+// 中文逐字換行（標點不放行首）
+function wrapCJK(ctx, text, maxW){
+  const no = '，。、；：！？」』）》', lines = []; let line = '';
+  for (const ch of [...text]) { const t = line + ch; if (ctx.measureText(t).width > maxW && line && !no.includes(ch)) { lines.push(line); line = ch; } else line = t; }
+  if (line) lines.push(line); return lines;
+}
+function drawCert(d){
+  const W = 2000, H = 1414, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d'), R = rng(20261118), cx = W / 2, INK = '#2b2622', ZHU = '#a8322a';
+  // 宣紙底＋纖維
+  let g = ctx.createRadialGradient(cx, H*0.45, 200, cx, H/2, 1300); g.addColorStop(0, '#fbf6ea'); g.addColorStop(1, '#eadfc4');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(120,95,60,.10)'; ctx.lineWidth = 1.2;
+  for (let i = 0; i < 1600; i++) { const x = R()*W, y = R()*H, a = R()*Math.PI, l = 6 + R()*26; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a)*l, y + Math.sin(a)*l); ctx.stroke(); }
+  // 淡墨枇杷葉剪影（右下）
+  ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#2f5e33';
+  for (let i = 0; i < 9; i++) { ctx.save(); ctx.translate(1720 + Math.cos(i)*120, 1000 + Math.sin(i*1.7)*90); ctx.rotate(i * 0.7); ctx.beginPath(); ctx.ellipse(0, 0, 150, 42, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  // 邊框：墨框＋朱細框＋回紋角飾
+  ctx.strokeStyle = INK; ctx.lineWidth = 10; ctx.strokeRect(40, 40, W - 80, H - 80);
+  ctx.strokeStyle = ZHU; ctx.lineWidth = 3; ctx.strokeRect(66, 66, W - 132, H - 132);
+  const meander = (x, y, sx, sy) => { ctx.save(); ctx.translate(x, y); ctx.scale(sx, sy); ctx.strokeStyle = ZHU; ctx.lineWidth = 5; ctx.beginPath();
+    ctx.moveTo(0, 90); ctx.lineTo(0, 0); ctx.lineTo(90, 0); ctx.moveTo(18, 70); ctx.lineTo(18, 18); ctx.lineTo(70, 18); ctx.lineTo(70, 50); ctx.lineTo(40, 50); ctx.lineTo(40, 36); ctx.stroke(); ctx.restore(); };
+  meander(86, 86, 1, 1); meander(W - 86, 86, -1, 1); meander(86, H - 86, 1, -1); meander(W - 86, H - 86, -1, -1);
+  // 左右直書
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(43,38,34,.55)'; ctx.font = `700 34px ${SERIF}`; vtext(ctx, '明・歸有光〈項脊軒志〉', 170, 250, 34, 1.25);
+  ctx.fillStyle = 'rgba(43,38,34,.5)'; ctx.font = `600 40px ${SERIF}`;
+  vtext(ctx, '庭有枇杷樹，吾妻死之年', 1840, 230, 40, 1.15); vtext(ctx, '所手植也，今已亭亭如蓋矣。', 1780, 230, 40, 1.15);
+  // 標題
+  ctx.fillStyle = ZHU; ctx.font = `700 34px ${SERIF}`; ctx.fillText('高 中 國 文 ・ 古 典 散 文 研 讀 闖 關', cx, 175);
+  ctx.fillStyle = INK; ctx.font = `900 108px ${SERIF}`; ctx.fillText('〈項脊軒志〉研讀結業證書', cx, 292);
+  ctx.fillStyle = '#5a4f45'; ctx.font = `600 36px ${SERIF}`; ctx.fillText('立體建築構造圖 × 文本研讀 × 三關闖關測驗', cx, 382);
+  ctx.strokeStyle = ZHU; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx - 520, 430); ctx.lineTo(cx - 20, 430); ctx.moveTo(cx + 20, 430); ctx.lineTo(cx + 520, 430); ctx.stroke();
+  ctx.fillStyle = ZHU; ctx.beginPath(); ctx.moveTo(cx, 418); ctx.lineTo(cx + 12, 430); ctx.lineTo(cx, 442); ctx.lineTo(cx - 12, 430); ctx.fill();
+  // 受證人
+  ctx.fillStyle = INK; ctx.font = `600 46px ${SERIF}`;
+  const who = [d.cls && (/[班級]$/.test(d.cls) ? d.cls : `${d.cls} 班`), d.seat && `${d.seat} 號`].filter(Boolean).join('　');
+  ctx.fillText('茲證明' + (who ? '　' + who : ''), cx, 505);
+  ctx.font = `900 124px ${SERIF}`; const nm = d.name || '（請輸入姓名）';
+  ctx.fillStyle = d.name ? INK : 'rgba(43,38,34,.35)'; ctx.fillText(nm, cx, 625);
+  const nw = Math.max(360, ctx.measureText(nm).width + 120);
+  ctx.strokeStyle = 'rgba(43,38,34,.75)'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx - nw/2, 700); ctx.quadraticCurveTo(cx, 712, cx + nw/2, 696); ctx.stroke();
+  ctx.font = `700 46px ${SERIF}`; ctx.fillStyle = INK; ctx.fillText('同學', cx + nw/2 + 70, 640);
+  ctx.font = `500 40px ${SERIF}`; ctx.fillStyle = INK;
+  wrapCJK(ctx, '完成〈項脊軒志〉立體空間探索、文本研讀與三關闖關測驗，能由一丈見方的小屋讀出「多可喜，亦多可悲」的深情，表現優異，特頒此證，以資嘉勉。', 1440).forEach((l, i) => ctx.fillText(l, cx, 778 + i * 60));
+  // 成績框
+  const bx = cx - 560, by = 905, bw = 1120, bh = 104;
+  ctx.fillStyle = 'rgba(168,50,42,.07)'; ctx.strokeStyle = ZHU; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 18) : ctx.rect(bx, by, bw, bh); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = ZHU; ctx.font = `800 50px ${SERIF}`; ctx.fillText(`闖關成績　${d.score} 分　評等「${d.grade}」`, cx, by + bh/2 + 2);
+  ctx.fillStyle = '#5a4f45'; ctx.font = `500 30px ${SERIF}`;
+  ctx.fillText(`原文熱點 ${d.hot}/${HOT_KEYS.length}　・　時間軸 ${d.stages}/${STAGES.length}　・　研讀單元 ${d.acc}/${ACC.length}　・　印章 ${d.seals.length}/${BADGES.length}`, cx, 1052);
+  // 已得印章列
+  const n = d.seals.length, gap = 128, x0 = 880 - (n - 1) * gap / 2;
+  d.seals.forEach((b, i) => { sealSquare(ctx, x0 + i * gap, 1150, 92, [...b.t], (R() - .5) * 0.18, R); ctx.fillStyle = '#5a4f45'; ctx.font = `500 22px ${SERIF}`; ctx.fillText(b.t, x0 + i * gap, 1218); });
+  // 落款
+  ctx.textAlign = 'left'; ctx.fillStyle = INK; ctx.font = `600 36px ${SERIF}`;
+  ctx.fillText('授課教師：' + (d.teacher || ''), 200, 1272);
+  if (!d.teacher) { ctx.strokeStyle = 'rgba(43,38,34,.6)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(390, 1292); ctx.lineTo(640, 1292); ctx.stroke(); }
+  ctx.textAlign = 'center'; ctx.fillText(d.date, 1000, 1272);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#7a6d60'; ctx.font = `500 22px ${SERIF}`; ctx.fillText('證書編號 ' + d.no + '　｜　本證書由〈項脊軒志〉互動教學網頁產生', 200, 1318);
+  // 大印：項脊軒印
+  sealZhu(ctx, 1655, 1205, 220, ['項','脊','軒','印'], -0.07, R);
+  return c;
+}
+function certFileName(){ return ('項脊軒志結業證書_' + (P.info.name || '學生').replace(/[\\/:*?"<>|\s]/g, '')).slice(0, 60) + '.png'; }
+async function certDownload(){
+  if (!P.info.name.trim()) { $('#ci-name').focus(); certNote('請先輸入姓名再下載。', true); return; }
+  await certFonts(); const c = drawCert(certData());
+  const url = c.toDataURL('image/png'); $('#certImg').src = url;
+  try { const a = document.createElement('a'); a.href = url; a.download = certFileName(); a.style.display = 'none'; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 800); } catch(e){}
+  certNote('已下載 ' + certFileName() + '（iPad／手機若沒有下載，請長按下方證書圖片「儲存影像」）。');
+  SND.fanfare();
+}
+async function certPrint(){
+  await certFonts(); const url = drawCert(certData()).toDataURL('image/png');
+  const img = $('#certPrintImg');
+  img.onload = () => { setTimeout(() => { try { window.print(); } catch(e){} }, 50); };
+  img.src = url;
+}
+async function certShare(){
+  try { await certFonts(); const blob = await new Promise(r => drawCert(certData()).toBlob(r, 'image/png'));
+    await navigator.share({ files:[new File([blob], certFileName(), {type:'image/png'})], title:'項脊軒志結業證書' }); } catch(e){}
+}
+function certNote(s, warn){ const n = $('#certNote'); n.textContent = s; n.style.color = warn ? '#a8322a' : ''; }
+
+/* ---------- 分頁切換（style.display） ---------- */
+const TABS = ['explore','study','quiz','cert'];
+function switchTab(t){
+  if (!TABS.includes(t)) t = 'explore';
+  TABS.forEach(x => { const el = $('#tab-' + x); el.style.display = x === t ? 'block' : 'none'; });
+  const pane = $('#tab-' + t); pane.style.animation = 'none'; void pane.offsetWidth; pane.style.animation = 'fadeIn .4s ease';
+  $$('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  APP.tab = t;
+  if (t === 'quiz' && !QZ) { show($('#lvGrid'), 'grid'); hide($('#quizPlay')); hide($('#quizResult')); renderLevels(); }
+  if (t === 'cert') renderCert();
+  renderSealStrip();
+  try { history.replaceState(null, '', '#' + t); } catch(e){}
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function scrollToEl(el){ if (!el) return; const hh = $('header').offsetHeight; window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + scrollY - hh - 8), behavior: 'smooth' }); }
+
+function initQuizCert(){
+  $$('[data-tab]').forEach(b => b.addEventListener('click', () => { SND.click(); switchTab(b.dataset.tab); }));
+  $$('[data-goto-tab]').forEach(b => b.addEventListener('click', () => { SND.click(); switchTab(b.dataset.gotoTab); }));
+  $('#progPill').addEventListener('click', () => { SND.click(); switchTab('cert'); });
+  ['name','cls','seat','teacher'].forEach(k => $('#ci-' + k).addEventListener('input', e => { P.info[k] = e.target.value.slice(0, 20); saveProg(); refreshCertPreview(); }));
+  $('#certDl').addEventListener('click', certDownload);
+  $('#certPr').addEventListener('click', certPrint);
+  const canShare = (() => { try { return !!(navigator.canShare && navigator.canShare({ files:[new File([''], 'a.png', {type:'image/png'})] })); } catch(e){ return false; } })();
+  $('#certSh').style.display = canShare ? 'inline-flex' : 'none';
+  $('#certSh').addEventListener('click', certShare);
+  window.addEventListener('afterprint', () => $('#certPrintImg').removeAttribute('src'));
+  // 重設：按兩次確認（不使用 confirm()，嵌入協作平台也可用）
+  let armed = null;
+  $('#progReset').addEventListener('click', e => {
+    const b = e.currentTarget;
+    if (!armed) { b.textContent = '⚠ 再按一次確認清除'; b.classList.add('btn-zhu'); armed = setTimeout(() => { armed = null; b.textContent = '🗑 重設學習紀錄'; b.classList.remove('btn-zhu'); }, 3500); return; }
+    clearTimeout(armed); armed = null; store.clear(); P = blankProg(); QZ = null;
+    b.textContent = '🗑 重設學習紀錄'; b.classList.remove('btn-zhu'); SND.wrong(); PROG.render(); renderCert(); renderLevels();
+  });
+  const h = (location.hash || '').slice(1);
+  switchTab(TABS.includes(h) ? h : 'explore');
+  PROG.check(); PROG.render();
+}
+
+/* =========================================================
+   九、初始化（不依賴 3D；3D 失敗時仍可使用）
 ========================================================= */
 function webglOK(){ try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch(e){ return false; } }
 function useFallback(msg){
@@ -725,18 +1183,18 @@ document.addEventListener('DOMContentLoaded', () => {
   buildPlan($('#minimap'), false);
   $('#tlDots').innerHTML = STAGES.map((s,i) => `<div class="tl-dot" data-i="${i}">${s.k}</div>`).join('');
   $$('.tl-dot').forEach(d => d.addEventListener('click', () => setStage(+d.dataset.i, true)));
-  buildAcc(); renderQuiz(); setStage(8);
+  buildAcc(); setStage(8); initQuizCert();
 
   // 音效開關（首次觸控時解鎖 AudioContext）
   const mb = $('#muteBtn'); const syncMute = () => mb.textContent = SND.muted ? '🔇 靜音' : '🔊 音效'; syncMute();
   mb.addEventListener('click', () => { SND.setMuted(!SND.muted); syncMute(); SND.click(); });
-  window.addEventListener('pointerdown', () => SND.unlock(), {once:true});
+  window.addEventListener('pointerdown', () => SND.wake(), {once:true});
 
   // 燈箱
   $('#lbClose').addEventListener('click', closeCard);
   $('#lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') closeCard(); });
   $('#lbPrev').addEventListener('click', () => stepCard(-1)); $('#lbNext').addEventListener('click', () => stepCard(1));
-  $('#lbFly').addEventListener('click', () => { closeCard(); document.getElementById('model').scrollIntoView({behavior:'smooth'}); if (X3()) X3().fly(HOT[APP.current].cam); });
+  $('#lbFly').addEventListener('click', () => { closeCard(); if (APP.tab !== 'explore') switchTab('explore'); setTimeout(() => scrollToEl($('#model')), 50); if (X3()) X3().fly(HOT[APP.current].cam); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); if ($('#lightbox').style.display !== 'none') { if (e.key==='ArrowRight') stepCard(1); if (e.key==='ArrowLeft') stepCard(-1); } });
 
   // 時間軸
@@ -746,10 +1204,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#tlPlay').addEventListener('click', tlPlay);
 
   // 鏡頭
-  $$('[data-cam]').forEach(b => b.addEventListener('click', () => { SND.whoosh(); if (X3()) X3().fly(CAMS[b.dataset.cam]); }));
+  $$('[data-cam]').forEach(b => b.addEventListener('click', () => { SND.whoosh(); if (b.dataset.cam === 'inside') PROG.flag('inside'); if (X3()) X3().fly(CAMS[b.dataset.cam]); }));
   // 修葺前後
-  $('#btnBefore').addEventListener('click', () => { APP.repaired = false; syncRepairBtns(); SND.drip(); if (X3()) X3().setRepaired(false); });
-  $('#btnAfter').addEventListener('click', () => { APP.repaired = true; syncRepairBtns(); SND.pluck(4); if (X3()) X3().setRepaired(true); });
+  $('#btnBefore').addEventListener('click', () => { APP.repaired = false; syncRepairBtns(); SND.drip(); PROG.flag('before'); if (X3()) X3().setRepaired(false); });
+  $('#btnAfter').addEventListener('click', () => { APP.repaired = true; syncRepairBtns(); SND.pluck(4); PROG.flag('after'); if (X3()) X3().setRepaired(true); });
   // 時刻
   const ts = $('#timeSlider');
   const setTime = t => { APP.time = t; ts.value = t; $('#timeLbl').textContent = APP.night ? '三五之夜' : timeText(t); if (X3()) X3().setTime(t); };
@@ -765,14 +1223,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function toggleNight(v){
     APP.night = v; $('#btnNight').classList.toggle('on', v); $('#timeLbl').textContent = v ? '三五之夜' : timeText(APP.time);
     if (v && sunTimer) $('#btnPlaySun').click();
-    if (v) SND.pluck(5);
+    if (v) { SND.pluck(5); PROG.flag('night'); }
     if (X3()) X3().setNight(v);
   }
   $('#btnNight').addEventListener('click', () => toggleNight(!APP.night));
   // 其他
   $('#btnLabels').addEventListener('click', e => { const on = !e.currentTarget.classList.contains('on'); e.currentTarget.classList.toggle('on', on); $('#labels').style.display = on ? 'block' : 'none'; });
   $('#btnRotate').addEventListener('click', e => { const on = !e.currentTarget.classList.contains('on'); e.currentTarget.classList.toggle('on', on); if (X3()) X3().autoRotate(on); });
-  $('#btnSteps').addEventListener('click', () => { if (X3()) { X3().fly(HOT.passage.cam); X3().footsteps(); } });
+  $('#btnSteps').addEventListener('click', () => { PROG.flag('steps'); if (X3()) { X3().fly(HOT.passage.cam); X3().footsteps(); } });
   $('#fsBtn').addEventListener('click', () => {
     const v = $('#viewer');
     if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
@@ -1128,17 +1586,49 @@ Object.entries(HOT).forEach(([k, h]) => {
 });
 DIR_LABELS.forEach(d => { const el = document.createElement('div'); el.className = 'lab dir'; el.textContent = d.t; labelBox.appendChild(el); labels.push({ el, key: null, v: new THREE.Vector3(...d.p), h: { lvl: 1, grp: 'ext' } }); });
 const tv = new THREE.Vector3();
+/* ---------- 標籤遮擋判斷 ----------
+   只把「牆、屋頂、建築」當遮擋物（地面、樹木、欄杆、特效、家具不算）；
+   每 3 幀以射線檢查一次：相機 → 標籤錨點下方約 0.9m（物件本體處）。
+   被擋住、在相機後方或畫面外 → 淡出（200ms）後 display:none，且不可點選。 */
+const OCC_KEYS = new Set(['xuan','window','door','yuanqiang','partition','hall','wings','zhonggui','kitchen','gate']);
+const occluders = [];
+scene.traverse(o => {
+  if (!o.isMesh || o.isInstancedMesh) return;
+  let p = o, ok = false; while (p) { if (p === outer || p === pwallG || p === courtWalls) { ok = true; break; } if (p === animals || p === fenceG || p === shelf || p === desk || p === holes) return; p = p.parent; }
+  if (ok || OCC_KEYS.has(o.userData.key)) occluders.push(o);
+});
+const occRay = new THREE.Raycaster(), occDir = new THREE.Vector3(), occPt = new THREE.Vector3();
+let occFrame = 0;
+function occluded(L) {
+  occPt.copy(L.v); occPt.y -= 0.9;
+  const dist = camera.position.distanceTo(occPt); if (dist < 0.8) return false;
+  occDir.subVectors(occPt, camera.position).normalize();
+  occRay.set(camera.position, occDir); occRay.far = dist - 0.6;   // 錨點附近 0.6m 內的面不算（如屋簷下的標籤）
+  const hits = occRay.intersectObjects(occluders, false);
+  return hits.some(h => h.object.userData.key !== L.key && isVisibleUp(h.object));
+}
+function setLabelVis(L, vis) {
+  if (vis) {
+    clearTimeout(L.hideT); L.hideT = null;
+    if (L.el.style.display !== 'block') { L.el.style.display = 'block'; void L.el.offsetWidth; }
+    if (L.el.style.opacity !== '1') { L.el.style.opacity = '1'; L.el.style.pointerEvents = L.key ? 'auto' : 'none'; }
+  } else if (L.el.style.display !== 'none' && !L.hideT) {
+    L.el.style.opacity = '0'; L.el.style.pointerEvents = 'none';          // 立刻不可點
+    L.hideT = setTimeout(() => { L.hideT = null; if (L.el.style.opacity === '0') L.el.style.display = 'none'; }, 210);
+  }
+}
 function updateLabels(w, h) {
   const inside = camera.position.x > XUAN.x0 && camera.position.x < XUAN.x1 && camera.position.z > XUAN.z0 && camera.position.z < XUAN.z1 && camera.position.y < 3;
+  const doOcc = (occFrame++ % 3) === 0;
   labels.forEach(L => {
     let vis = (L.h.grp === 'int') === inside;
     if (!L.key && camera.position.length() < 20) vis = false; // 近景時隱藏方位字
     if (L.key === 'loquat' && loquat.scale.x < 0.05) vis = false;
     if (vis && L.h.lvl === 2 && !inside && camera.position.distanceTo(L.v) > 15) vis = false;
-    if (vis) { tv.copy(L.v).project(camera); if (tv.z > 1 || Math.abs(tv.x) > 1.1 || Math.abs(tv.y) > 1.1) vis = false; }
-    if (!vis) { if (L.el.style.display !== 'none') L.el.style.display = 'none'; return; }
-    if (L.el.style.display !== 'block') L.el.style.display = 'block';
-    L.el.style.transform = `translate(${(tv.x * 0.5 + 0.5) * w}px, ${(-tv.y * 0.5 + 0.5) * h}px) translate(-50%,-100%)`;
+    if (vis) { tv.copy(L.v).project(camera); if (tv.z > 1 || tv.z < -1 || Math.abs(tv.x) > 1.05 || Math.abs(tv.y) > 1.05) vis = false; } // 相機後方／畫面外
+    if (vis && L.key) { if (doOcc || L.occ === undefined) L.occ = occluded(L); vis = !L.occ; } else L.occ = undefined;
+    setLabelVis(L, vis);
+    if (vis) L.el.style.transform = `translate(${(tv.x * 0.5 + 0.5) * w}px, ${(-tv.y * 0.5 + 0.5) * h}px) translate(-50%,-100%)`;
   });
 }
 
@@ -1262,7 +1752,7 @@ canvas.addEventListener('pointermove', e => {
 
 /* ---------- 尺寸 ---------- */
 let W = 1, H = 1;
-function resize() { W = viewer.clientWidth; H = viewer.clientHeight; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
+function resize() { if (!viewer.clientWidth || !viewer.clientHeight) return; W = viewer.clientWidth; H = viewer.clientHeight; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
 new ResizeObserver(resize).observe(viewer); resize();
 // 不在畫面中時暫停渲染（省電）
 let onScreen = true; new IntersectionObserver(es => onScreen = es[0].isIntersecting).observe(viewer);
@@ -1321,6 +1811,8 @@ window.XJ3D = {
   setTime(t) { S.time = t; updateLight(); },
   setNight(v) { S.night = v; updateLight(); if (v) { fly({ p: [0.4, 1.6, 5.6], t: [-0.4, 1.9, 2.0] }); toast('三五之夜，明月半牆，桂影斑駁', 3500); } },
   autoRotate(v) { controls.autoRotate = v; },
+  // 測試用：目前可見（可點）的標籤
+  visibleLabels() { return labels.filter(l => l.el.style.display === 'block' && l.el.style.opacity === '1').map(l => l.el.textContent); },
   // 測試用：3D 座標 → 畫面座標
   project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(camera), r = canvas.getBoundingClientRect(); return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height }; },
 };
