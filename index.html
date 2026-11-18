@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>〈項脊軒志〉立體建築構造圖｜文本推測復原</title>
+<!-- =========================================================
+  〈項脊軒志〉立體建築構造圖（教學互動網頁）
+  技術：HTML + Tailwind CDN + 原生 JavaScript；3D 部分使用 Three.js（CDN, ES module）
+  說明：顯示／隱藏一律以 style.display 控制；音效以 Web Audio API 即時合成。
+  文本：依中文維基文庫《震川先生集》本校對，字形依臺灣高中課本通行寫法（閣、踰）。
+========================================================= -->
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+<!-- Three.js 匯入對照表（CDN） -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+  /* ---------- 色票：宣紙、墨、朱紅 ---------- */
+  :root{
+    --paper:#f3ecdc; --paper2:#ebe1ca; --ink:#2b2622; --ink2:#5a4f45;
+    --zhu:#a8322a; --zhu2:#c4473b; --gold:#b8862f; --jade:#4d6b4a;
+  }
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Noto Serif TC','Noto Serif CJK TC','Source Han Serif TC','PMingLiU',serif;
+    color:var(--ink);
+    background-color:var(--paper);
+    /* 宣紙纖維質感：以 SVG 雜訊 + 漸層模擬 */
+    background-image:
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .45 0 0 0 0 .38 0 0 0 0 .28 0 0 0 .07 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+      radial-gradient(ellipse at 20% 0%, #f8f3e6 0%, transparent 60%),
+      radial-gradient(ellipse at 100% 100%, #e8dcc0 0%, transparent 55%);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ink-title{letter-spacing:.12em}
+  /* 朱印 */
+  .seal{display:inline-flex;align-items:center;justify-content:center;background:var(--zhu);color:#fbefe6;
+        border-radius:6px;font-weight:900;box-shadow:inset 0 0 0 2px #fbefe6, inset 0 0 0 4px var(--zhu);
+        writing-mode:vertical-rl;padding:.4em .25em;line-height:1.05;letter-spacing:.05em}
+  .card{background:rgba(251,247,238,.86);border:1px solid #d8cbb0;border-radius:16px;
+        box-shadow:0 1px 0 #fff inset, 0 8px 24px -14px rgba(60,40,20,.45);backdrop-filter:blur(2px)}
+  .card-h{border-bottom:1px dashed #cdbd9c}
+  .btn{display:inline-flex;align-items:center;gap:.35em;border:1px solid #bba987;border-radius:999px;
+       padding:.5em 1em;min-height:44px;background:#fbf6ea;color:var(--ink);transition:transform .15s, background .2s, box-shadow .2s;cursor:pointer;user-select:none}
+  .btn:hover{background:#fff;box-shadow:0 4px 12px -6px rgba(0,0,0,.35)}
+  .btn:active{transform:scale(.96)}
+  .btn.on{background:var(--ink);color:#f6efe0;border-color:var(--ink)}
+  .btn-zhu{background:var(--zhu);border-color:var(--zhu);color:#fff6ef}
+  .btn-zhu:hover{background:var(--zhu2)}
+  .chip{display:inline-block;font-size:.78rem;border-radius:999px;padding:.15em .7em;border:1px solid currentColor}
+  .tag-text{color:var(--jade)} .tag-guess{color:var(--zhu)}
+  blockquote.yuan{border-left:4px solid var(--zhu);background:#f6eedc;padding:.8em 1em;border-radius:0 10px 10px 0;
+       font-size:1.12rem;line-height:2;letter-spacing:.04em}
+  /* 3D 檢視器 */
+  #viewer{position:relative;overflow:hidden;border-radius:14px;background:#e9e0cc;touch-action:none;height:min(640px, calc(100vh - 110px));min-height:460px}
+  #viewer canvas{display:block;width:100%;height:100%;outline:none}
+  #labels{position:absolute;inset:0;pointer-events:none}
+  .lab{position:absolute;left:0;top:0;transform:translate(-50%,-100%);pointer-events:auto;white-space:nowrap;
+       font-size:13px;line-height:1.2;padding:4px 9px;border-radius:8px;background:rgba(251,246,234,.92);border:1px solid #9c8a6b;
+       color:var(--ink);box-shadow:0 3px 10px -4px rgba(0,0,0,.4);cursor:pointer;transition:background .15s}
+  .lab:hover{background:#fff}
+  .lab::after{content:'';position:absolute;left:50%;bottom:-7px;width:1px;height:7px;background:#6d5d45}
+  .lab small{display:block;font-size:10.5px;color:var(--ink2)}
+  .lab.guess{border-style:dashed}
+  .lab.main{background:var(--zhu);color:#fff7ee;border-color:var(--zhu)}
+  .lab.main small{color:#ffe1d6}
+  .lab.dir{background:transparent;border:none;box-shadow:none;color:var(--zhu);font-weight:900;font-size:18px;pointer-events:none}
+  .lab.dir::after{display:none}
+  #minimap{position:absolute;left:10px;bottom:10px;width:170px;background:rgba(248,242,228,.93);border:1px solid #b9a782;border-radius:10px;padding:4px}
+  #hud{position:absolute;right:10px;top:10px;background:rgba(248,242,228,.93);border:1px solid #b9a782;border-radius:10px;padding:8px 10px;font-size:12.5px;width:190px}
+  #toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:rgba(43,38,34,.88);color:#f8efdc;
+         padding:8px 16px;border-radius:999px;font-size:15px;letter-spacing:.1em;pointer-events:none;transition:opacity .4s}
+  .meter{height:8px;border-radius:9px;background:#d9ccb0;overflow:hidden}
+  .meter > i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c9a24a,#ffd77a);transition:width .4s}
+  /* 時間軸 */
+  input[type=range]{accent-color:var(--zhu);width:100%;height:36px}
+  .tl-dot{flex:1;text-align:center;font-size:12px;cursor:pointer;padding:6px 2px;border-top:3px solid #cdbd9c;color:var(--ink2);min-width:0}
+  .tl-dot.on{border-color:var(--zhu);color:var(--zhu);font-weight:700}
+  /* 手風琴 */
+  .acc-btn{width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;padding:14px 18px;min-height:52px;font-weight:700;font-size:1.06rem}
+  .acc-btn .arr{transition:transform .3s}
+  .acc-panel{padding:0 18px 18px;line-height:1.95;animation:fadeIn .35s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.94) translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes inkIn{from{opacity:0;letter-spacing:.5em;filter:blur(4px)}to{opacity:1;letter-spacing:.12em;filter:none}}
+  .ink-in{animation:inkIn 1.4s ease both}
+  .seg{cursor:pointer;border-radius:4px;transition:background .2s}
+  .seg:hover{background:#f1dfc0}
+  .seg.k{border-bottom:1px dotted var(--zhu)}
+  /* 燈箱 */
+  #lightbox{position:fixed;inset:0;z-index:60;background:rgba(30,24,18,.55);align-items:center;justify-content:center;padding:16px}
+  #lightbox .box{max-width:760px;width:100%;max-height:90vh;overflow:auto;animation:pop .3s ease}
+  /* 測驗 */
+  .opt{display:block;width:100%;text-align:left;border:1px solid #cdbd9c;border-radius:10px;padding:10px 14px;margin:6px 0;background:#fbf7ee;min-height:46px;transition:background .2s,border-color .2s}
+  .opt:hover{background:#fff}
+  .opt.sel{border-color:var(--ink);background:#efe5cf}
+  .opt.right{border-color:#3f7a45;background:#e3f0dc}
+  .opt.wrong{border-color:var(--zhu);background:#f7e0db}
+  table.map td, table.map th{border:1px solid #d8cbb0;padding:6px 8px;vertical-align:top}
+  table.map th{background:#efe4cb}
+  /* 響應式 */
+  @media (max-width:1023px){ #viewer{height:70vh;min-height:460px} }
+  @media (max-width:640px){
+    #viewer{height:62vh;min-height:380px}
+    #minimap{width:120px} #hud{width:150px;font-size:11.5px;padding:6px 8px}
+    .lab{font-size:12px;padding:3px 7px}
+    blockquote.yuan{font-size:1.02rem}
+  }
+  /* 偽全螢幕（iPhone 等不支援元素全螢幕時） */
+  .pseudo-fs{position:fixed !important;inset:0 !important;z-index:50;height:100vh !important;border-radius:0 !important}
+  @media (prefers-reduced-motion: reduce){ *{animation:none !important;transition:none !important} }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============ 頂部工具列 ============ -->
+<header class="sticky top-0 z-40 backdrop-blur bg-[rgba(243,236,220,.85)] border-b border-[#d8cbb0]">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
+    <span class="seal text-sm">項脊</span>
+    <b class="ink-title text-lg">項脊軒志・立體構造圖</b>
+    <nav class="ml-auto hidden md:flex gap-1 text-sm">
+      <a class="btn" href="#model">3D 模型</a><a class="btn" href="#timeline">時間軸</a>
+      <a class="btn" href="#study">文本研讀</a><a class="btn" href="#quiz">測驗</a>
+    </nav>
+    <button id="muteBtn" class="btn ml-auto md:ml-2" aria-label="音效開關">🔊 音效</button>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 pb-16">
+
+<!-- ============ Hero ============ -->
+<section class="pt-8 pb-6 grid md:grid-cols-[1fr_auto] gap-6 items-center">
+  <div>
+    <p class="text-[var(--zhu)] tracking-[.3em] text-sm">明・歸有光｜高中國文・空間與情感</p>
+    <h1 class="ink-in text-4xl md:text-6xl font-black mt-2">項脊軒志</h1>
+    <p class="mt-1 text-xl md:text-2xl text-[var(--ink2)] tracking-widest">一丈見方的小屋，三代人的身影</p>
+    <p class="mt-4 max-w-2xl leading-8">
+      拖曳旋轉、雙指縮放，走進「室僅方丈」的南閣子：看它從<b>塵泥滲漉、日過午已昏</b>，
+      到<b>前闢四窗、日影反照</b>；在<b>明月半牆</b>的夜裡看桂影斑駁；再推動時間軸，
+      看庭院由<b>籬</b>而<b>牆</b>、小屋<b>四遭火</b>而不焚，最後枇杷樹<b>亭亭如蓋</b>。
+    </p>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <a href="#model" class="btn btn-zhu">▶ 開始探索 3D 模型</a>
+      <a href="#timeline" class="btn">⏳ 時間軸</a>
+      <a href="#quiz" class="btn">✍ 學測式測驗</a>
+    </div>
+  </div>
+  <div class="card p-4 max-w-sm">
+    <div class="flex gap-3 items-start">
+      <span class="seal text-base">推測</span>
+      <p class="text-sm leading-7"><b>文本推測復原，非考古實測圖。</b>
+      軒的大小（方丈）、北向、軒前四窗、垣牆周庭、軒東為廚、室西連中閨等皆有原文依據；
+      <b>正堂、東西廂、大門（東側）、隔牆走向、樹木位置</b>則依明代江南宅院常例推測。
+      模型中標示 <span class="chip tag-guess">推測</span> 者即無原文直接依據。</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 3D 模型主區 ============ -->
+<section id="model" class="grid lg:grid-cols-[1fr_300px] gap-4 scroll-mt-20">
+  <div class="card p-2">
+    <div id="viewer">
+      <canvas id="c3d" aria-label="項脊軒 3D 模型"></canvas>
+      <div id="labels"></div>
+      <!-- 小地圖（2D 平面圖，與 3D 相機同步） -->
+      <div id="minimap" title="平面配置圖（點選建築可跳轉）"></div>
+      <!-- 光照資訊 -->
+      <div id="hud">
+        <div class="flex justify-between"><b>室內亮度</b><span id="hudLux">—</span></div>
+        <div class="meter my-1"><i id="hudBar"></i></div>
+        <div id="hudNote" class="leading-5 text-[var(--ink2)]">—</div>
+      </div>
+      <div id="toast" style="opacity:0">…</div>
+      <!-- 載入中 -->
+      <div id="loading" class="absolute inset-0 flex items-center justify-center text-lg" style="display:flex;background:#ece3cf">
+        <span class="animate-pulse tracking-widest">研墨中…載入 3D 模型</span>
+      </div>
+      <!-- WebGL 失敗時的 2D 平面圖備援 -->
+      <div id="fallback2d" class="absolute inset-0 p-3 overflow-auto bg-[#f3ecdc]" style="display:none">
+        <p class="text-sm text-[var(--zhu)] mb-2">此裝置無法啟用 3D（WebGL），已改用 2D 平面圖：點選區塊即可閱讀原文與解讀。</p>
+        <div id="bigplan" class="max-w-xl mx-auto"></div>
+      </div>
+    </div>
+    <p class="text-xs text-[var(--ink2)] px-2 pt-2">操作：單指／滑鼠拖曳＝旋轉；雙指捏合／滾輪＝縮放；雙指拖曳／右鍵＝平移；點擊建築或標籤＝開啟原文卡片。座標：上北下南（小地圖），1 格 ≈ 1 公尺。</p>
+  </div>
+
+  <!-- 控制面板 -->
+  <aside class="card p-4 flex flex-col gap-4 text-sm">
+    <div>
+      <h3 class="font-bold mb-2">🎥 鏡頭</h3>
+      <div class="grid grid-cols-2 gap-2" id="camBtns">
+        <button class="btn" data-cam="overview">全景鳥瞰</button>
+        <button class="btn" data-cam="south">南立面</button>
+        <button class="btn" data-cam="court">軒前小庭</button>
+        <button class="btn" data-cam="inside">進入軒內</button>
+        <button class="btn" data-cam="kitchen">東廚動線</button>
+        <button class="btn" id="fsBtn">⛶ 全螢幕</button>
+      </div>
+    </div>
+    <div>
+      <h3 class="font-bold mb-2">🔨 修葺</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn" id="btnBefore">修葺前</button>
+        <button class="btn" id="btnAfter">修葺後</button>
+      </div>
+    </div>
+    <div>
+      <h3 class="font-bold mb-1 flex justify-between"><span>☀ 時刻</span><span id="timeLbl">正午 12:00</span></h3>
+      <input id="timeSlider" type="range" min="6" max="18" step="0.25" value="12" aria-label="時刻">
+      <div class="grid grid-cols-2 gap-2 mt-1">
+        <button class="btn" id="btnPlaySun">▶ 日影流轉</button>
+        <button class="btn" id="btnNight">🌕 三五之夜</button>
+      </div>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button class="btn on" id="btnLabels">🏷 標籤</button>
+      <button class="btn" id="btnRotate">⟳ 自動旋轉</button>
+      <button class="btn" id="btnSteps">👣 聽足音</button>
+    </div>
+    <div class="text-xs leading-6 text-[var(--ink2)] border-t border-dashed border-[#cdbd9c] pt-3">
+      <b class="text-[var(--ink)]">圖例</b><br>
+      <span class="chip tag-text">原文</span> 有原文依據　<span class="chip tag-guess">推測</span> 依常例推測<br>
+      金色光點＝陽光「反照」路徑；朱紅光圈＝目前焦點／時間軸影響範圍。
+    </div>
+  </aside>
+</section>
+
+<!-- ============ 時間軸 ============ -->
+<section id="timeline" class="card p-4 md:p-6 mt-6 scroll-mt-20">
+  <div class="flex flex-wrap items-center gap-3 card-h pb-3">
+    <span class="seal text-sm">變遷</span>
+    <h2 class="text-2xl font-bold ink-title">時間軸：一座宅院的「凡再變矣」</h2>
+    <div class="ml-auto flex gap-2">
+      <button class="btn" id="tlPrev">◀ 前</button>
+      <button class="btn" id="tlPlay">▶ 播放</button>
+      <button class="btn" id="tlNext">後 ▶</button>
+    </div>
+  </div>
+  <input id="tlSlider" type="range" min="0" max="8" step="1" value="8" class="mt-4" aria-label="時間軸">
+  <div id="tlDots" class="flex gap-1"></div>
+  <div id="tlCard" class="mt-4 grid md:grid-cols-[1.2fr_1fr] gap-4"></div>
+</section>
+
+<!-- ============ 文本研讀（手風琴） ============ -->
+<section id="study" class="mt-6 scroll-mt-20">
+  <div class="flex items-center gap-3 mb-3"><span class="seal text-sm">研讀</span><h2 class="text-2xl font-bold ink-title">文本研讀：空間 × 情感</h2></div>
+  <div id="acc" class="flex flex-col gap-3"></div>
+</section>
+
+<!-- ============ 測驗 ============ -->
+<section id="quiz" class="card p-4 md:p-6 mt-6 scroll-mt-20">
+  <div class="flex flex-wrap items-center gap-3 card-h pb-3">
+    <span class="seal text-sm">測驗</span>
+    <h2 class="text-2xl font-bold ink-title">學測／分科式小測驗</h2>
+    <span id="quizScore" class="ml-auto text-[var(--zhu)] font-bold"></span>
+  </div>
+  <div id="quizBox" class="mt-3 grid gap-4"></div>
+  <div class="mt-4 flex gap-2"><button class="btn" id="quizReset">↺ 重新作答</button></div>
+</section>
+
+<footer class="mt-8 text-xs leading-6 text-[var(--ink2)]">
+  <p>原文依據：中文維基文庫〈項脊軒志〉（《震川先生集》卷十七本）。底本作「南閤子」「客逾庖而宴」「亦遂（一作逐）增勝」，本頁依臺灣高中課本通行寫法作「閣」「踰」；「諸葛孔明起隴中」之「隴中」即「隆中」。</p>
+  <p>本模型為<b>文本推測復原</b>，尺寸以明代一丈約 3.1–3.2 公尺換算，僅供教學討論。</p>
+</footer>
+</main>
+
+<!-- ============ 燈箱（卡片） ============ -->
+<div id="lightbox" style="display:none" role="dialog" aria-modal="true">
+  <div class="box card p-5 md:p-7 bg-[#fbf7ee]">
+    <div class="flex items-start gap-3">
+      <span id="lbSeal" class="seal text-base">原文</span>
+      <div class="flex-1">
+        <h3 id="lbTitle" class="text-2xl font-black ink-title"></h3>
+        <div id="lbTag" class="mt-1"></div>
+      </div>
+      <button id="lbClose" class="btn" aria-label="關閉">✕</button>
+    </div>
+    <blockquote id="lbQuote" class="yuan mt-4"></blockquote>
+    <h4 class="font-bold mt-4 text-[var(--zhu)]">白話翻譯</h4>
+    <p id="lbTrans" class="leading-8"></p>
+    <h4 class="font-bold mt-3 text-[var(--zhu)]">建築／情感解讀</h4>
+    <div id="lbRead" class="leading-8"></div>
+    <div class="mt-5 flex flex-wrap gap-2">
+      <button id="lbFly" class="btn btn-zhu">🎥 鏡頭飛到這裡</button>
+      <button id="lbPrev" class="btn">◀ 上一處</button>
+      <button id="lbNext" class="btn">下一處 ▶</button>
+    </div>
+  </div>
+</div>
+<script>
+/* =========================================================
+   一、資料：熱點（原文／白話／解讀／鏡頭位置）
+   座標系：x 向東、z 向南（北＝ -z），單位約 1 公尺
+========================================================= */
+const HOT = {
+  xuan:{t:'項脊軒（舊南閣子）',tag:'原文',lvl:1,grp:'ext',label:[0,5.0,8],main:true,sub:'室僅方丈・點擊進入',
+    q:'項脊軒，舊南閣子也。室僅方丈，可容一人居。百年老屋，塵泥滲漉，雨澤下注，每移案，顧視無可置者。又北向，不能得日，日過午已昏。',
+    tr:'項脊軒，就是從前的南閣子。屋內只有一丈見方，只能容納一個人居住。這是一間上百年的老屋，屋頂的塵土泥沙滲漏下來，雨水也直往下灌；每次想移動書桌，環顧四周，竟找不到可以安放的地方。屋子又朝向北面，照不到陽光，一過中午，室內就已經昏暗了。',
+    rd:'<b>建築：</b>「方丈」約一丈見方；明代一丈約 3.1–3.2 公尺，面積不到 10 平方公尺（約 3 坪）。「北向」指門窗朝北；本模型將軒置於宅院南側、面向北邊的小庭，也呼應「南閣子」之名（位於宅南的小閣）。<br><b>情感：</b>開篇以「小、舊、漏、暗」四重困境寫敗屋，欲揚先抑，為下文修葺之「喜」鋪墊。軒名「項脊」，一說因遠祖歸道隆曾居太倉項脊涇，寓追念先祖之意。',
+    cam:{p:[5.5,7,0.5],t:[0,1.5,7.5]}, ring:[0,8,2.6]},
+  window:{t:'前闢四窗',tag:'原文',lvl:2,grp:'ext',label:[1.05,3.0,6.2],
+    q:'余稍為修葺，使不上漏；前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然。',
+    tr:'我稍加修理，讓屋頂不再從上面漏下塵泥雨水；在屋前開了四扇窗，在庭院四周砌上圍牆，用來承接南面的陽光；陽光照在牆上再反射進屋，室內這才明亮起來。',
+    rd:'<b>建築：</b>軒既北向，太陽在南，光從屋後來，屋前反而背光。作者在軒前（北側）小庭築牆，讓朝南的牆面承受日照，再把光反射進新開的四扇窗——這是古人巧妙的「反射採光」。「當」一般解為「承受、迎著」，亦有解作「遮擋」者；本模型採「承接」說，以符合「日影反照」的光學邏輯。<br><b>情感：</b>「稍為」見其簡樸，「洞然」寫出豁然開朗的欣喜；請把時刻滑桿拖到正午，看金色光點如何「反照」入室。',
+    cam:{p:[0.3,1.7,2.6],t:[0,1.4,6.4]}, ring:[0,6.4,1.8]},
+  yuanqiang:{t:'垣牆周庭（反光牆）',tag:'原文',lvl:2,grp:'ext',label:[-0.2,3.3,2],
+    q:'垣牆周庭，以當南日；日影反照，室始洞然。……三五之夜，明月半牆，桂影斑駁，風移影動，珊珊可愛。',
+    tr:'在庭院四周築起圍牆，承接南面的陽光；日光經牆面反射，室內才明亮起來。……每逢十五的夜晚，明月照亮半面牆，桂樹的影子錯落斑駁，風吹影動，美好可愛。',
+    rd:'<b>建築：</b>同一堵牆，白天是「反光板」，夜裡是「月光的畫布」。月亮高掛南天時，軒的屋頂把牆的下半部遮在陰影裡，只有上半截被照亮——「半牆」不只是修辭，也是準確的光影觀察（按「三五之夜」驗證）。<br><b>情感：</b>以景寫情：牆圍出一方小天地，成了少年安頓身心的所在。',
+    cam:{p:[0.3,1.6,5.6],t:[0,1.8,2]}, ring:[0,2,3.2]},
+  court:{t:'庭階',tag:'原文',lvl:2,grp:'ext',label:[0.9,0.9,4.4],
+    q:'而庭階寂寂，小鳥時來啄食，人至不去。',
+    tr:'庭院的台階一片寂靜，小鳥不時飛來啄食，人走近了也不飛走。',
+    rd:'<b>手法：</b>以動襯靜——小鳥「人至不去」，可見作者久坐不動、物我兩忘，庭院之幽靜不言可喻。<br><b>建築：</b>「庭階」指軒前通往庭院的台階（模型中軒門前一級石階）。',
+    cam:{p:[-4.5,5.5,1.0],t:[0,0.5,4.2]}, ring:[0,4.2,2.8]},
+  plants:{t:'蘭桂竹木',tag:'原文',lvl:2,grp:'ext',label:[-2.4,4.6,2.7],
+    q:'又雜植蘭桂竹木於庭，舊時欄楯，亦遂增勝。',
+    tr:'又在庭院中錯雜種上蘭花、桂樹、竹子等花木，從前的欄杆，也因此增添了光彩。',
+    rd:'<b>建築：</b>花木植於軒前小庭；模型中竹、桂、蘭的位置僅為示意。<br><b>情感：</b>「增勝」二字見作者經營一方小天地的得意，屬全文「可喜」的部分。蘭、桂、竹皆有君子高潔之象徵。',
+    cam:{p:[1.0,1.7,5.5],t:[-2.2,1.6,3.2]}, ring:[-2.3,3,1.4]},
+  railing:{t:'舊時欄楯',tag:'原文',lvl:2,grp:'ext',label:[-1.25,1.3,6.0],
+    q:'舊時欄楯，亦遂增勝。',
+    tr:'從前的欄杆，也因此增添了光彩。',
+    rd:'<b>名詞：</b>「欄楯」——直者為欄，橫者為楯，即欄杆。<br><b>解讀：</b>欄杆是「舊」的，景致卻因花木而「新」，舊物新景，正是少年把破屋經營成書齋的心情。',
+    cam:{p:[2.6,1.8,4.0],t:[0,0.6,6.0]}, ring:[0,6,1.8]},
+  shelf:{t:'借書滿架',tag:'原文',lvl:2,grp:'int',label:[-1.3,2.3,8.4],
+    q:'借書滿架，偃仰嘯歌，冥然兀坐，萬籟有聲。',
+    tr:'借來的書擺滿書架，我時而俯仰吟誦、長嘯高歌，時而靜靜獨坐，四周各種自然的聲響都聽得見。',
+    rd:'<b>手法：</b>以聲寫靜——能聽見「萬籟」，可見其靜。「借書」暗示家貧而好學。<br><b>空間：</b>不到十平方公尺的方丈小室，成了少年的精神天地。',
+    cam:{p:[0.8,1.5,7.2],t:[-1.45,1.3,8.6]}, ring:[-1.2,8.4,0.8]},
+  desk:{t:'几案（妻憑几學書）',tag:'原文',lvl:2,grp:'int',label:[0.6,1.25,7.1],
+    q:'余既為此志，後五年，吾妻來歸。時至軒中，從余問古事，或憑几學書。吾妻歸寧，述諸小妹語曰：「聞姊家有閣子，且何謂閣子也？」',
+    tr:'我寫了這篇志以後，又過了五年，妻子嫁到我家。她時常到軒中來，向我請教古代的事情，有時靠著几案學寫字。妻子回娘家，回來轉述她幾個小妹妹的話說：「聽說姊姊家有個閣子，那麼，什麼叫做閣子呢？」',
+    rd:'<b>細節：</b>「憑几學書」寫閨房之樂；小妹的問話側寫妻子在娘家常提起這間小屋與丈夫。<br><b>空間轉化：</b>同一張几案，從少年苦讀之所，變成夫妻共處之所；下文「吾妻死，室壞不修」，人亡則屋敗。',
+    cam:{p:[-0.6,1.7,8.9],t:[0.6,0.7,7.0]}, ring:[0.6,7,0.8]},
+  door:{t:'軒門（大母闔門）',tag:'原文',lvl:2,grp:'ext',label:[0,2.5,6.3],
+    q:'余自束髮讀書軒中，一日，大母過余曰：「吾兒，久不見若影，何竟日默默在此，大類女郎也！」比去，以手闔門，自語曰：「吾家讀書久不效，兒之成，則可待乎？」頃之，持一象笏至，曰：「此吾祖太常公宣德間執此以朝，他日汝當用之。」瞻顧遺跡，如在昨日，令人長號不自禁。',
+    tr:'我從十五歲束髮起就在軒中讀書。有一天，祖母來看我，說：「我的孩子，好久沒看見你的身影了，為什麼整天默默待在這裡，真像個女孩子呀！」離開時，她用手把門關上，自言自語地說：「我們家讀書很久沒有成效了，這孩子的成功，應該可以期待吧！」不久，拿了一塊象牙笏板來，說：「這是我祖父太常公在宣德年間拿著上朝用的，將來你應該用得上。」回想這些舊日遺物與往事，好像就在昨天，令人忍不住放聲痛哭。',
+    rd:'<b>細節：</b>「以手闔門」——怕打擾孫兒讀書，疼惜之情全在一個關門的動作；「象笏」承載家族振興的期望。<br><b>空間：</b>「門」是祖孫情感交會之處；「瞻顧遺跡，如在昨日」，物在而人亡，悲從中來。',
+    cam:{p:[0.8,1.8,4.2],t:[0,1.2,6.4]}, ring:[0,6.4,1]},
+  zhonggui:{t:'中閨（室西相連）',tag:'原文',lvl:1,grp:'ext',label:[-5.4,5.2,8.4],sub:'先妣嘗一至',
+    q:'室西連於中閨，先妣嘗一至。嫗每謂余曰：「某所，而母立於茲。」嫗又曰：「汝姊在吾懷，呱呱而泣；娘以指叩門扉曰：『兒寒乎？欲食乎？』吾從板外相為應答。」語未畢，余泣，嫗亦泣。',
+    tr:'軒的西邊與內室相連，先母曾經來過一次。老婦人常對我說：「這個地方，你母親曾經站在這裡。」又說：「你姊姊在我懷裡呱呱地哭；你母親用手指敲著房門說：『孩子冷了嗎？想吃東西嗎？』我就隔著門板回答她。」話還沒說完，我就哭了，老婦人也哭了。',
+    rd:'<b>手法：</b>作者八歲喪母，對母親的記憶只能靠老嫗轉述（側面描寫）。「以指叩門扉」「從板外相為應答」以細節傳情。<br><b>空間 × 情感：</b>一扇門板隔開了母親與孩子，也象徵作者與母親永遠無法跨越的距離——空間上「相連」，人事上卻「永隔」。',
+    cam:{p:[-5,8,1.5],t:[-5.4,1.5,8.4]}, ring:[-5.4,8.4,3]},
+  kitchen:{t:'東側舊廚',tag:'原文',lvl:1,grp:'ext',label:[4.9,5.3,8.4],sub:'軒東故嘗為廚',
+    q:'軒東故嘗為廚，人往，從軒前過。',
+    tr:'軒的東邊從前曾經是廚房，人們到那裡去，都要從軒前經過。',
+    rd:'<b>建築：</b>「故嘗」表示寫作時已不是廚房。往來者須穿過軒前——模型以石板小徑標示這條動線（位置為推測）。廚房屋身較高（有灶與排煙需求，推測）。<br><b>呼應：</b>分家後「客踰庖而宴」，客人得穿過廚房去赴宴，格局之亂可見。',
+    cam:{p:[6.5,6,1.5],t:[4.9,1.5,8.4]}, ring:[4.9,8.4,3]},
+  passage:{t:'軒前過道（足音）',tag:'原文',lvl:2,grp:'ext',label:[-2.0,0.9,5.2],
+    q:'余扃牖而居，久之，能以足音辨人。軒凡四遭火，得不焚，殆有神護者。',
+    tr:'我關著窗戶住在裡面，時間久了，能憑腳步聲辨別來人是誰。軒總共遭遇四次火災，都沒有被燒毀，大概有神明保護吧。',
+    rd:'<b>手法：</b>以聽覺寫專注與久居——關窗苦讀，卻能辨足音，可見對家人的熟悉。<br><b>情感：</b>「四遭火得不焚，殆有神護」流露對此軒的珍愛與一點少年的自負（呼應第四段「項脊生曰」自比蜀清、孔明）。按「👣 聽足音」可聽見腳步從軒前走過。',
+    cam:{p:[-1,6.5,0.8],t:[0,0,5.2]}, ring:[0,5.2,3]},
+  partition:{t:'庭中隔牆（籬→牆）',tag:'原文',lvl:1,grp:'ext',label:[-4.2,3.2,-1.5],sub:'凡再變矣',
+    q:'先是，庭中通南北為一，迨諸父異爨，內外多置小門牆，往往而是。東犬西吠，客踰庖而宴，雞棲於廳。庭中始為籬，已為牆，凡再變矣。',
+    tr:'在此之前，庭院南北相通，是一個整體。等到伯父、叔父們分家各自開伙，內外設置了許多小門和牆，到處都是。東家的狗對著西家吠叫，客人要越過廚房去赴宴，雞在廳堂裡棲息。庭院中起初用籬笆隔開，後來又砌成牆，總共變動了兩次。',
+    rd:'<b>名詞：</b>「異爨」＝分灶吃飯，即分家。<br><b>空間 × 情感：</b>由「通南北為一」到「籬」再到「牆」，隔閡由疏而密、由可見而不可見，空間的層層分割正是家族離散、親情淡漠的具象化。「東犬西吠」「雞棲於廳」以荒誕畫面寫家道衰落。<br><span class="chip tag-guess">推測</span> 隔牆的確切走向原文未載，模型以東西向一道、南北向一段示意。',
+    cam:{p:[10,13,8],t:[0,0.5,-2.5]}, ring:[0,-2.5,6]},
+  hall:{t:'正堂（廳）',tag:'推測',lvl:1,grp:'ext',label:[0,7.2,-9.2],sub:'雞棲於廳',
+    q:'東犬西吠，客踰庖而宴，雞棲於廳。',
+    tr:'東家的狗對著西家吠叫，客人要越過廚房去赴宴，雞在廳堂裡棲息。',
+    rd:'<b>解讀：</b>廳是家族祭祀、待客之所，本應莊嚴；「雞棲於廳」寫禮法秩序的崩壞。<br><span class="chip tag-guess">推測</span> 原文只提「廳」，未說位置；依明代江南宅院「坐北朝南」常例置於北側。',
+    cam:{p:[4,7,1],t:[0,2.5,-9]}, ring:[0,-8,5]},
+  wings:{t:'東西廂房',tag:'推測',lvl:1,grp:'ext',label:[9.6,5,-2.5],sub:'諸父分居（推測）',
+    q:'迨諸父異爨，內外多置小門牆，往往而是。',
+    tr:'等到伯父、叔父們分家各自開伙，內外設置了許多小門和牆，到處都是。',
+    rd:'<span class="chip tag-guess">推測</span> 原文未記廂房；依合院常例加入，用以說明「諸父異爨」後各房分居、各自築牆的情形。',
+    cam:{p:[0,10,4],t:[0,1.5,-3]}, ring:[9.6,-2.5,3]},
+  gate:{t:'大門（東偏側）',tag:'推測',lvl:1,grp:'ext',label:[12.2,4.6,3.7],
+    q:'（原文未記載大門位置）',
+    tr:'—',
+    rd:'<span class="chip tag-guess">推測</span> 江南宅院常於東南或東側開門；此處依常例置於東牆。可讓學生討論：若大門在別處，「人往，從軒前過」的動線會怎麼變？',
+    cam:{p:[18,6,6],t:[11,1.5,3.6]}, ring:[12,3.7,1.6]},
+  loquat:{t:'枇杷樹',tag:'原文',lvl:1,grp:'ext',label:[2.2,4.6,3.2],main:true,sub:'亭亭如蓋',
+    q:'庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣。',
+    tr:'庭院中有一棵枇杷樹，是我妻子去世那一年親手種下的，如今已經高高挺立，枝葉茂密得像一把傘蓋了。',
+    rd:'<b>手法：</b>以景結情、借物抒情——不言悲而悲自見。樹的「亭亭如蓋」標記了時間的漫長：樹愈茂盛，人愈遙遠，正是「物是人非」。<br><b>補充：</b>「手植」者一般解為作者親手所植，亦有解為妻子生前所植者，可供討論。拖動時間軸，看枇杷樹從無到亭亭如蓋。',
+    cam:{p:[-1.0,2.0,5.6],t:[2.2,2.4,3.0]}, ring:[2.2,3.2,1.6]},
+  gui:{t:'桂樹・明月半牆',tag:'原文',lvl:2,grp:'ext',label:[-2.0,3.9,4.0],
+    q:'三五之夜，明月半牆，桂影斑駁，風移影動，珊珊可愛。',
+    tr:'每逢農曆十五的夜晚，明亮的月光照在半面牆上，桂樹的影子錯落斑駁，風一吹，影子跟著搖動，美好可愛。',
+    rd:'<b>修辭：</b>視覺（月光、斑駁）＋動態（風移影動）＋情態（珊珊可愛），以景寫情，是首段「喜」的高峰。「三五」＝十五。<br><b>試試看：</b>按「🌕 三五之夜」，再到「軒前小庭」鏡頭，看桂影在牆上搖動。',
+    cam:{p:[0.6,1.6,5.6],t:[-2,2.2,3.8]}, ring:[-2,4,1.2]},
+};
+const HOT_KEYS = Object.keys(HOT);
+/* 額外方位標籤 */
+const DIR_LABELS = [{t:'北',p:[0,0.2,-14]},{t:'南',p:[0,0.2,12.6]},{t:'東',p:[13.4,0.2,0]},{t:'西',p:[-13.4,0.2,0]}];
+
+/* 預設鏡頭 */
+const CAMS = {
+  overview:{p:[17,23,26],t:[0,0,0]},
+  south:{p:[0,4.5,32],t:[0,2.5,0]},
+  court:{p:[0.2,3.6,2.4],t:[0,1.0,6.2]},
+  inside:{p:[0.9,1.55,9.25],t:[-0.3,1.3,6.6]},
+  kitchen:HOT.kitchen.cam,
+};
+
+/* =========================================================
+   二、時間軸資料：每一階段對模型的影響（state）
+========================================================= */
+const STAGES = [
+  {k:'先是',t:'庭中通南北為一',q:'先是，庭中通南北為一。',
+   n:'作者出生前後，大家庭尚未分家，庭院南北通透。此時的南閣子仍是漏雨、北向昏暗的老屋。',
+   s:{partition:'none',repaired:false,ruined:false,rebuilt:false,fire:false,animals:false,loquat:0}, hl:['partition','hall']},
+  {k:'分家',t:'諸父異爨・始為籬',q:'迨諸父異爨，內外多置小門牆，往往而是。東犬西吠，客踰庖而宴，雞棲於廳。庭中始為籬，',
+   n:'伯叔分家，庭中先以竹籬分隔。觀察：狗、雞出現在原本莊重的廳前。',
+   s:{partition:'fence',repaired:false,ruined:false,rebuilt:false,fire:false,animals:true,loquat:0}, hl:['partition','hall']},
+  {k:'再變',t:'已為牆・凡再變矣',q:'已為牆，凡再變矣。',
+   n:'籬笆換成實牆：看得見的隔閡，變成看不見彼此的隔閡。',
+   s:{partition:'wall',repaired:false,ruined:false,rebuilt:false,fire:false,animals:true,loquat:0}, hl:['partition']},
+  {k:'修葺',t:'少年修葺：前闢四窗・垣牆周庭',q:'余稍為修葺，使不上漏；前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然。',
+   n:'作者少年讀書於此（正文一般認為作於十八、九歲）。屋頂不漏、四窗開啟、小庭築牆反光——全文「喜」的高峰。',
+   s:{partition:'wall',repaired:true,ruined:false,rebuilt:false,fire:false,animals:false,loquat:0}, hl:['window','yuanqiang']},
+  {k:'四火',t:'軒凡四遭火，得不焚',q:'軒凡四遭火，得不焚，殆有神護者。',
+   n:'火災四次逼近，小軒卻安然無恙。模型以四次火光示意（火災時間原文未載）。',
+   s:{partition:'wall',repaired:true,ruined:false,rebuilt:false,fire:true,animals:false,loquat:0}, hl:['xuan']},
+  {k:'來歸',t:'後五年，吾妻來歸',q:'余既為此志，後五年，吾妻來歸。時至軒中，從余問古事，或憑几學書。',
+   n:'妻子常到軒中，憑几學書。方丈小室有了第二個人的身影。',
+   s:{partition:'wall',repaired:true,ruined:false,rebuilt:false,fire:false,animals:false,loquat:0}, hl:['desk','xuan']},
+  {k:'妻死',t:'其後六年，吾妻死，室壞不修',q:'其後六年，吾妻死，室壞不修。……庭有枇杷樹，吾妻死之年所手植也。',
+   n:'人亡屋敗：屋頂塌陷、漏雨重現、雜草叢生。同年，庭中種下一株枇杷幼苗。',
+   s:{partition:'wall',repaired:true,ruined:true,rebuilt:false,fire:false,animals:false,loquat:0.18}, hl:['xuan','loquat']},
+  {k:'復葺',t:'其後二年，復葺南閣子',q:'其後二年，余久臥病無聊，乃使人復葺南閣子，其制稍異於前。然自後余多在外，不常居。',
+   n:'重修後「其制稍異於前」——原文未說明差異，模型僅以屋頂換新、窗上加披檐示意（推測）。',
+   s:{partition:'wall',repaired:true,ruined:false,rebuilt:true,fire:false,animals:false,loquat:0.38}, hl:['xuan']},
+  {k:'今',t:'今已亭亭如蓋矣',q:'庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣。',
+   n:'枇杷樹已枝葉如傘蓋。樹愈茂，人愈遠——以景結情，物是人非。',
+   s:{partition:'wall',repaired:true,ruined:false,rebuilt:true,fire:false,animals:false,loquat:1}, hl:['loquat']},
+];
+
+/* =========================================================
+   三、全文（可點選段落，連動模型）
+========================================================= */
+const FULLTEXT = [
+  [['項脊軒，舊南閣子也。室僅方丈，可容一人居。百年老屋，塵泥滲漉，雨澤下注，每移案，顧視無可置者。又北向，不能得日，日過午已昏。','xuan'],['余稍為修葺，使不上漏；前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然。','window'],['又雜植蘭桂竹木於庭，舊時欄楯，亦遂增勝。','plants'],['借書滿架，偃仰嘯歌，冥然兀坐，萬籟有聲；','shelf'],['而庭階寂寂，小鳥時來啄食，人至不去。','court'],['三五之夜，明月半牆，桂影斑駁，風移影動，珊珊可愛。','gui']],
+  [['然余居於此，多可喜，亦多可悲。',null],['先是，庭中通南北為一，迨諸父異爨，內外多置小門牆，往往而是。東犬西吠，客踰庖而宴，雞棲於廳。庭中始為籬，已為牆，凡再變矣。','partition'],['家有老嫗，嘗居於此。嫗，先大母婢也，乳二世，先妣撫之甚厚。',null],['室西連於中閨，先妣嘗一至。嫗每謂余曰：「某所，而母立於茲。」嫗又曰：「汝姊在吾懷，呱呱而泣；娘以指叩門扉曰：『兒寒乎？欲食乎？』吾從板外相為應答。」語未畢，余泣，嫗亦泣。','zhonggui'],['余自束髮讀書軒中，一日，大母過余曰：「吾兒，久不見若影，何竟日默默在此，大類女郎也！」比去，以手闔門，自語曰：「吾家讀書久不效，兒之成，則可待乎？」頃之，持一象笏至，曰：「此吾祖太常公宣德間執此以朝，他日汝當用之。」瞻顧遺跡，如在昨日，令人長號不自禁。','door']],
+  [['軒東故嘗為廚，人往，從軒前過。','kitchen'],['余扃牖而居，久之，能以足音辨人。','passage'],['軒凡四遭火，得不焚，殆有神護者。','stage:4']],
+  [['項脊生曰：蜀清守丹穴，利甲天下，其後秦皇帝築女懷清臺。劉玄德與曹操爭天下，諸葛孔明起隴中，方二人之昧昧於一隅也，世何足以知之？余區區處敗屋中，方揚眉瞬目，謂有奇景；人知之者，其謂與埳井之蛙何異？',null]],
+  [['余既為此志，後五年，吾妻來歸。時至軒中，從余問古事，或憑几學書。吾妻歸寧，述諸小妹語曰：「聞姊家有閣子，且何謂閣子也？」','desk'],['其後六年，吾妻死，室壞不修。','stage:6'],['其後二年，余久臥病無聊，乃使人復葺南閣子，其制稍異於前。然自後余多在外，不常居。','stage:7']],
+  [['庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣。','loquat']],
+];
+
+/* =========================================================
+   四、音效：Web Audio API 即時合成（無外部音檔）
+========================================================= */
+const SND = (() => {
+  let ctx = null, muted = localStorage.getItem('xjx-muted') === '1';
+  const ac = () => { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} } if (ctx && ctx.state === 'suspended') ctx.resume(); return ctx; };
+  // 基本音：頻率、長度、波形、音量、滑音終點
+  function tone(f, d=0.25, type='sine', g=0.12, f2=null, delay=0){
+    if (muted) return; const c = ac(); if (!c) return;
+    const t = c.currentTime + delay, o = c.createOscillator(), v = c.createGain(), lp = c.createBiquadFilter();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + d);
+    lp.type = 'lowpass'; lp.frequency.value = 2600;
+    v.gain.setValueAtTime(0.0001, t); v.gain.exponentialRampToValueAtTime(g, t + 0.008); v.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(lp).connect(v).connect(c.destination); o.start(t); o.stop(t + d + 0.05);
+  }
+  // 雜訊（腳步、火聲）
+  function noise(d=0.12, g=0.15, fq=400, q=1, delay=0){
+    if (muted) return; const c = ac(); if (!c) return;
+    const t = c.currentTime + delay, len = Math.floor(c.sampleRate * d), buf = c.createBuffer(1, len, c.sampleRate), a = buf.getChannelData(0);
+    for (let i=0;i<len;i++) a[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2);
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), v = c.createGain();
+    s.buffer = buf; f.type = 'bandpass'; f.frequency.value = fq; f.Q.value = q; v.gain.value = g;
+    s.connect(f).connect(v).connect(c.destination); s.start(t);
+  }
+  const PENTA = [293.7, 329.6, 392, 440, 523.3, 587.3]; // 五聲音階（似古琴泛音）
+  return {
+    unlock: ac,
+    get muted(){ return muted; },
+    setMuted(m){ muted = m; localStorage.setItem('xjx-muted', m ? '1':'0'); },
+    click(){ tone(880, 0.09, 'sine', 0.08, 620); },                       // 木魚般輕敲
+    pluck(i=0){ const f = PENTA[i % PENTA.length]; tone(f, 1.1, 'triangle', 0.09); tone(f*2, 0.6, 'sine', 0.025); },
+    open(){ tone(392, 0.9, 'triangle', 0.08); tone(587.3, 1.0, 'triangle', 0.05, null, 0.09); },
+    drip(){ tone(1400 + Math.random()*500, 0.12, 'sine', 0.04, 500); },
+    step(){ noise(0.09, 0.35, 180 + Math.random()*60, 0.8); },
+    crackle(){ noise(0.04, 0.08, 1800 + Math.random()*1500, 2); },
+    whoosh(){ noise(0.5, 0.05, 700, 0.6); },
+    right(){ tone(523.3, 0.5, 'triangle', 0.09); tone(784, 0.7, 'triangle', 0.08, null, 0.12); },
+    wrong(){ tone(196, 0.45, 'sawtooth', 0.04, 150); },
+    bark(){ tone(520, 0.12, 'square', 0.03, 260); tone(480, 0.12, 'square', 0.03, 240, 0.18); },
+  };
+})();
+
+/* =========================================================
+   五、全域 APP：UI ↔ 3D 的溝通橋樑
+========================================================= */
+const APP = window.APP = { stage: 8, repaired: true, night: false, time: 12, current: null, ready3d: false };
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const show = (el, v='block') => { if (el) el.style.display = v; };   // 一律用 style.display
+const hide = (el) => { if (el) el.style.display = 'none'; };
+const X3 = () => (APP.ready3d && window.XJ3D) ? window.XJ3D : null;
+
+/* ---------- 燈箱卡片 ---------- */
+function openCard(key){
+  if (!key) return;
+  if (key.startsWith('stage:')) { setStage(+key.split(':')[1], true); document.getElementById('timeline').scrollIntoView({behavior:'smooth'}); return; }
+  const h = HOT[key]; if (!h) return;
+  APP.current = key; SND.open();
+  $('#lbTitle').textContent = h.t;
+  $('#lbSeal').textContent = h.tag === '推測' ? '推測' : '原文';
+  $('#lbTag').innerHTML = h.tag === '推測' ? '<span class="chip tag-guess">位置依常例推測，非原文明載</span>' : '<span class="chip tag-text">有原文依據</span>';
+  $('#lbQuote').textContent = h.q; $('#lbTrans').textContent = h.tr; $('#lbRead').innerHTML = h.rd;
+  show($('#lightbox'), 'flex');
+  highlightPlan([key]);
+  if (X3()) X3().focus(key);
+}
+function closeCard(){ hide($('#lightbox')); }
+function stepCard(d){ const i = HOT_KEYS.indexOf(APP.current); openCard(HOT_KEYS[(i + d + HOT_KEYS.length) % HOT_KEYS.length]); }
+
+/* ---------- 2D 平面圖（小地圖／備援）：SVG 生成 ---------- */
+const PLAN = [ // [key, x0, z0, x1, z1, 名稱]
+  ['hall',-6,-12,6,-6.5,'正堂'], ['wings',-11.6,-6,-7.6,1,'西廂'], ['wings',7.6,-6,11.6,1,'東廂'],
+  ['zhonggui',-9,6.2,-1.8,10.6,'中閨'], ['xuan',-1.6,6.4,1.6,9.6,'軒'], ['kitchen',1.8,6.2,8,10.6,'舊廚'],
+  ['court',-3,2,3,6.4,'小庭'], ['gate',11.6,3,12.6,4.4,'門'],
+];
+function buildPlan(el, big){
+  const fs = big ? 1.1 : 1.3;
+  let s = `<svg viewBox="-13.2 -13.4 26.4 25.4" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;font-family:inherit">
+  <rect x="-12" y="-12.4" width="24" height="23.6" fill="#efe6d2" stroke="#2b2622" stroke-width=".25"/>`;
+  PLAN.forEach(([k,x0,z0,x1,z1,n]) => {
+    s += `<g class="pz" data-key="${k}" style="cursor:pointer"><rect data-k="${k}" x="${x0}" y="${z0}" width="${x1-x0}" height="${z1-z0}" rx=".2"
+      fill="${k==='xuan'?'#f1d7c6':(k==='court'?'#e3dcc0':'#e2d6bb')}" stroke="#2b2622" stroke-width="${k==='xuan'?.25:.15}" ${HOT[k].tag==='推測'?'stroke-dasharray=".6 .4"':''}/>
+      <text x="${(x0+x1)/2}" y="${(z0+z1)/2+.45}" text-anchor="middle" font-size="${fs}" fill="${k==='xuan'?'#a8322a':'#2b2622'}" font-weight="700">${n}</text></g>`;
+  });
+  // 隔牆（籬／牆）
+  s += `<g id="${big?'b':'m'}Part" data-key="partition" style="cursor:pointer"><path d="M-7.6 -1.5 H-1.2 M0 -1.5 H7.6 M0 -6.5 V-3.2" stroke="#a8322a" stroke-width=".35" fill="none"/></g>`;
+  // 軒前動線
+  s += `<path d="M-6 5.2 H3.6 L5 6.2" stroke="#8a6d3b" stroke-width=".18" stroke-dasharray=".5 .35" fill="none"/>`;
+  // 樹
+  s += `<g data-key="loquat" style="cursor:pointer"><circle id="${big?'b':'m'}Loq" cx="2.2" cy="3.2" r="1" fill="#4f7a43" opacity=".75"/></g>
+        <g data-key="gui" style="cursor:pointer"><circle cx="-2" cy="4" r=".7" fill="#6b8f4e" opacity=".75"/></g>`;
+  // 指北針與比例尺
+  s += `<g transform="translate(-10.6,-10.6)"><path d="M0 -1.6 L.6 .6 L0 .2 L-.6 .6Z" fill="#a8322a"/><text y="-1.9" font-size="1.1" text-anchor="middle" fill="#a8322a" font-weight="900">北</text></g>
+        <g transform="translate(4.5,-11.4)"><path d="M0 0 H3.2" stroke="#2b2622" stroke-width=".2"/><text x="1.6" y="-.4" font-size=".8" text-anchor="middle">一丈≈3.2m</text></g>`;
+  // 相機位置
+  if (!big) s += `<g id="camMark"><path id="camFov" d="" fill="rgba(168,50,42,.18)"/><circle id="camDot" r=".55" fill="#a8322a" stroke="#fff" stroke-width=".15"/></g>`;
+  s += `</svg>`;
+  el.innerHTML = s;
+  $$('[data-key]', el).forEach(g => g.addEventListener('click', e => { e.stopPropagation(); SND.click(); openCard(g.dataset.key); }));
+}
+// 平面圖高亮（時間軸、焦點）
+function highlightPlan(keys){
+  $$('rect[data-k]').forEach(r => { const on = keys.includes(r.dataset.k); r.style.stroke = on ? '#a8322a' : '#2b2622'; r.style.strokeWidth = on ? '.45' : ''; });
+  $$('#mPart path, #bPart path').forEach(p => p.style.strokeWidth = keys.includes('partition') ? '.6' : '.35');
+}
+// 由 3D 回呼：更新小地圖上的相機位置
+APP.updateMini = (x, z, ang) => {
+  const d = $('#camDot'), f = $('#camFov'); if (!d) return;
+  d.setAttribute('cx', x.toFixed(2)); d.setAttribute('cy', z.toFixed(2));
+  const L = 5, a1 = ang - 0.45, a2 = ang + 0.45;
+  f.setAttribute('d', `M${x} ${z} L${x+Math.cos(a1)*L} ${z+Math.sin(a1)*L} L${x+Math.cos(a2)*L} ${z+Math.sin(a2)*L}Z`);
+};
+
+/* ---------- 時間軸 ---------- */
+function renderStageCard(){
+  const st = STAGES[APP.stage];
+  $('#tlCard').innerHTML = `
+   <div><p class="text-[var(--zhu)] text-sm tracking-widest">第 ${APP.stage+1} 階段・${st.k}</p>
+     <h3 class="text-xl font-bold mt-1">${st.t}</h3>
+     <blockquote class="yuan mt-3">${st.q}</blockquote></div>
+   <div class="leading-8"><h4 class="font-bold text-[var(--zhu)]">模型變化與解讀</h4><p>${st.n}</p>
+     <p class="text-sm mt-2 text-[var(--ink2)]">朱紅光圈與平面圖紅框＝本階段受影響的空間。</p>
+     <a href="#model" class="btn mt-2">↑ 回到 3D 模型觀察</a></div>`;
+  $$('.tl-dot').forEach((d,i) => d.classList.toggle('on', i === APP.stage));
+  $('#tlSlider').value = APP.stage;
+}
+function setStage(i, sound){
+  APP.stage = Math.max(0, Math.min(STAGES.length-1, i));
+  const st = STAGES[APP.stage];
+  APP.repaired = st.s.repaired; syncRepairBtns();
+  renderStageCard(); highlightPlan(st.hl);
+  const lq = $('#mLoq'); if (lq) lq.setAttribute('r', Math.max(0.12, st.s.loquat*1.5));
+  const bl = $('#bLoq'); if (bl) bl.setAttribute('r', Math.max(0.12, st.s.loquat*1.5));
+  $$('#mPart, #bPart').forEach(g => g.style.display = st.s.partition === 'none' ? 'none' : 'inline');
+  $$('#mPart path, #bPart path').forEach(p => p.setAttribute('stroke-dasharray', st.s.partition === 'fence' ? '.4 .3' : ''));
+  if (sound) SND.pluck(APP.stage);
+  if (X3()) X3().applyStage(st);
+}
+let tlTimer = null;
+function tlPlay(){
+  const b = $('#tlPlay');
+  if (tlTimer) { clearInterval(tlTimer); tlTimer = null; b.textContent = '▶ 播放'; return; }
+  if (APP.stage >= STAGES.length-1) setStage(0, true);
+  b.textContent = '❚❚ 暫停';
+  tlTimer = setInterval(() => { if (APP.stage >= STAGES.length-1) { tlPlay(); return; } setStage(APP.stage+1, true); }, 3200);
+}
+
+/* ---------- 控制面板 ---------- */
+function syncRepairBtns(){ $('#btnBefore').classList.toggle('on', !APP.repaired); $('#btnAfter').classList.toggle('on', APP.repaired); }
+function timeText(t){ const h = Math.floor(t), m = Math.round((t-h)*60); const name = t < 11 ? '上午' : (t <= 13 ? '正午' : '午後'); return `${name} ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+let sunTimer = null;
+
+/* ---------- 文本研讀（手風琴內容） ---------- */
+const ACC = [
+  {t:'📜 原文全文（點句子 → 模型跳到對應空間）', open:true, h: () => FULLTEXT.map((p,pi) => `<p class="mb-3 text-[1.08rem] leading-[2.1] tracking-wide">${pi===4?'<span class="chip tag-text mr-1">補記</span>':''}${p.map(([s,k]) => k ? `<span class="seg k" data-k="${k}">${s}</span>` : `<span>${s}</span>`).join('')}</p>`).join('') + '<p class="text-xs text-[var(--ink2)]">底本作「閤」「逾」；本頁依臺灣課本通行字形。</p>'},
+  {t:'🧭 章法：由「喜」到「悲」', h: () => `
+   <div class="grid md:grid-cols-5 gap-2 text-sm">
+    ${[['第一段','軒之景','修葺前後、蘭桂竹木、明月半牆','喜'],['第二段','家之變・親之思','諸父異爨、先妣、大母象笏','悲'],['第三段','軒之奇','東廚足音、四遭火不焚','轉'],['第四段','項脊生曰','自比蜀清、孔明：敗屋中之志','志'],['補記','妻・枇杷','憑几學書、室壞、亭亭如蓋','悲']].map(([a,b,c,d]) => `<div class="card p-3"><b>${a}</b><p class="text-[var(--zhu)] font-bold">${b}</p><p>${c}</p><span class="seal text-xs mt-2">${d}</span></div>`).join('')}
+   </div>
+   <p class="mt-3">樞紐句：<b>「然余居於此，多可喜，亦多可悲。」</b>承上（可喜之景）啟下（可悲之事），全文情感以此為分水嶺。正文與補記相隔十餘年，同一空間因人事變遷而意義不同。</p>`},
+  {t:'🖋 修辭與寫作手法', h: () => `<ul class="list-disc pl-6">
+    <li><b>以景寫情／借物抒情：</b>明月半牆、桂影斑駁寫少年之樂；枇杷樹亭亭如蓋寄喪妻之痛。</li>
+    <li><b>物是人非：</b>「瞻顧遺跡，如在昨日」；枇杷樹愈長大，妻子離去愈久。</li>
+    <li><b>以聲寫靜、以動襯靜：</b>「萬籟有聲」；「小鳥時來啄食，人至不去」。</li>
+    <li><b>細節描寫：</b>「以指叩門扉」「以手闔門」「持一象笏至」——以小動作傳深情。</li>
+    <li><b>側面描寫：</b>母親形象全由老嫗轉述；妻子形象借小妹問語烘托。</li>
+    <li><b>對比：</b>修葺前「昏」↔ 修葺後「洞然」；庭中「通為一」↔「籬」「牆」。</li>
+    <li><b>欲揚先抑：</b>先寫老屋之窄、漏、暗，再寫修葺之明亮可喜。</li>
+    <li><b>首尾呼應：</b>由「軒」始，以「庭」中之樹結；空間不變，人事全非。</li></ul>`},
+  {t:'🏠 空間與情感對應表', h: () => `<div class="overflow-x-auto"><table class="map w-full text-sm"><tr><th>空間</th><th>原文</th><th>情感／意涵</th></tr>
+    ${[['方丈小室','室僅方丈，可容一人居','困窘中的自足天地'],['四窗・反光牆','日影反照，室始洞然','少年之喜、經營之樂'],['庭（夜）','明月半牆，桂影斑駁','靜謐閒適之美'],['庭中籬→牆','凡再變矣','家族離散、親情疏離'],['廳','雞棲於廳','禮法崩壞、家道中落'],['中閨・門扉','以指叩門扉','對亡母的追念'],['軒門','以手闔門','祖母的疼惜與期望'],['軒前過道','能以足音辨人','久居專注、與家人的熟悉'],['几案','憑几學書','夫妻情深'],['庭中枇杷','亭亭如蓋','物是人非、悼亡之痛']].map(r => `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`},
+  {t:'☀ 2D 剖面圖：「日影反照」的原理', h: () => `
+    <svg viewBox="0 0 640 260" class="w-full max-w-2xl" style="font-family:inherit">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c99a2e"/></marker></defs>
+      <line x1="10" y1="220" x2="630" y2="220" stroke="#2b2622" stroke-width="2"/>
+      <text x="20" y="245" font-size="14">北</text><text x="600" y="245" font-size="14">南</text>
+      <rect x="150" y="90" width="14" height="130" fill="#efe8d8" stroke="#2b2622"/><text x="118" y="80" font-size="13">垣牆（反光）</text>
+      <rect x="360" y="110" width="150" height="110" fill="#f1d7c6" stroke="#2b2622"/>
+      <path d="M345 112 Q435 60 525 112" fill="#3b3d44"/>
+      <rect x="360" y="150" width="8" height="30" fill="#fff8d0" stroke="#7a3b26"/><text x="380" y="170" font-size="13">四窗（朝北）</text>
+      <text x="400" y="205" font-size="13">項脊軒（方丈）</text>
+      <circle cx="600" cy="40" r="18" fill="#f2b84b"><animate attributeName="r" values="16;20;16" dur="3s" repeatCount="indefinite"/></circle>
+      <path d="M585 50 L164 150" stroke="#c99a2e" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#ar)"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="1s" repeatCount="indefinite"/></path>
+      <path d="M166 152 L360 165" stroke="#c99a2e" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#ar)"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="1s" repeatCount="indefinite"/></path>
+      <text x="200" y="135" font-size="13" fill="#8a6418">南日 → 牆面 → 反照入窗</text>
+      <text x="220" y="250" font-size="12" fill="#5a4f45">示意圖，比例非實測</text>
+    </svg>
+    <p>軒門窗朝北，太陽在南：直射光被軒自身擋住。作者在軒前小庭北側築牆，牆面朝南受光，再把光反射進新開的四扇窗。</p>`},
+  {t:'👤 作者與寫作背景', h: () => `<p>歸有光（1507–1571），字熙甫，號震川，明代崑山人，唐宋派代表作家，散文以敘寫家常瑣事、真摯動人見長。八歲喪母，屢試不第，六十歲始中進士。</p>
+    <p>〈項脊軒志〉正文一般認為作於作者十八、九歲時；「余既為此志」以下為十多年後所補記。前後兩次書寫同一空間，形成時間的縱深。</p>`},
+  {t:'🔍 復原依據與推測說明（給老師）', h: () => `<ul class="list-disc pl-6">
+    <li><b>有原文依據：</b>軒為舊南閣子、室僅方丈、北向、軒前四窗、垣牆周庭、庭植蘭桂竹木、舊時欄楯、軒東故為廚且人從軒前過、室西連於中閨、庭有枇杷樹、四遭火、室壞不修、復葺而「其制稍異於前」、庭中籬→牆。</li>
+    <li><b>推測：</b>正堂在北、東西廂、大門在東側、隔牆走向、廚房較高、樹木與欄楯的確切位置、軒門居中左右各二窗、「其制稍異」的具體樣貌、火災發生的位置。</li>
+    <li><b>詮釋選擇：</b>「以當南日」採「承受南面陽光」說；「北向」理解為門窗朝北、軒位於小庭之南。模型尺寸：一丈≈3.2 公尺。</li>
+    <li><b>課堂延伸：</b>請學生依原文自行畫出平面圖，與本模型比較，並說明自己推測的理由。</li></ul>`},
+];
+function buildAcc(){
+  const box = $('#acc');
+  box.innerHTML = ACC.map((a,i) => `<div class="card"><button class="acc-btn" data-i="${i}"><span>${a.t}</span><span class="arr">▾</span></button><div class="acc-panel" id="accP${i}" style="display:none">${a.h()}</div></div>`).join('');
+  $$('.acc-btn', box).forEach(b => b.addEventListener('click', () => {
+    const p = $('#accP'+b.dataset.i), open = p.style.display !== 'none';
+    p.style.display = open ? 'none' : 'block'; b.querySelector('.arr').style.transform = open ? '' : 'rotate(180deg)'; SND.click();
+  }));
+  ACC.forEach((a,i) => { if (a.open) { $('#accP'+i).style.display='block'; $$('.acc-btn',box)[i].querySelector('.arr').style.transform='rotate(180deg)'; } });
+  $$('.seg.k', box).forEach(s => s.addEventListener('click', () => openCard(s.dataset.k)));
+}
+
+/* =========================================================
+   六、測驗（學測／分科測驗風格）
+========================================================= */
+const QUIZ = [
+  {q:'關於項脊軒修葺後「室始洞然」的原因，下列敘述何者最符合文意？',
+   o:['拆除北牆、改為朝南開門，使陽光直射入室','在軒前開四扇窗，並於庭院四周築牆承接南面日光，使光線經牆面反射入室','在屋頂開設天窗，讓正午陽光自上而下照入','砍除庭中蘭桂竹木，使陽光不再受到遮蔽'],
+   a:[1], ex:'「前闢四窗，垣牆周庭，以當南日；日影反照，室始洞然」：軒北向得不到直射日光，靠牆面「反照」採光。（可在 3D 模型拖動時刻滑桿觀察金色光點路徑）', key:'window'},
+  {q:'「庭中始為籬，已為牆，凡再變矣」一句，最主要反映何種現象？',
+   o:['歸家為防竊盜而加強門禁','家族分居後，原本相通的庭院被層層分隔，暗示親情疏離、家道衰落','作者為求讀書清靜而自行築牆','庭院荒蕪，以籬牆防止雞犬踐踏花木'],
+   a:[1], ex:'承「迨諸父異爨，內外多置小門牆」而來；由「通南北為一」到籬、到牆，空間的分割即家族的分裂。', key:'partition'},
+  {q:'下列文句，何者最能體現「以聲寫靜」的手法？',
+   o:['東犬西吠，客踰庖而宴','借書滿架，偃仰嘯歌，冥然兀坐，萬籟有聲','三五之夜，明月半牆，桂影斑駁','百年老屋，塵泥滲漉，雨澤下注'],
+   a:[1], ex:'能聽見「萬籟有聲」，正因四周極靜、作者心靜。(A) 寫分家後的雜亂；(C) 以視覺寫景；(D) 寫老屋破敗。', key:'shelf'},
+  {q:'「庭有枇杷樹，吾妻死之年所手植也，今已亭亭如蓋矣」作為全文結尾，其藝術效果的說明，何者最適切？',
+   o:['直抒胸臆，痛陳喪妻之悲','借樹木成長寫時間流逝，物在人亡，以景結情，含蓄深沉','以枇杷果實甘美，象徵夫妻生活美滿','呼應首段「雜植蘭桂竹木」，說明庭院日漸繁茂、家道中興'],
+   a:[1], ex:'不直言悲傷，而以樹之「亭亭如蓋」暗示歲月漫長、人亡已久——以景結情、物是人非。', key:'loquat'},
+  {q:'若要依〈項脊軒志〉畫出宅院平面圖，下列哪一項「無法」從原文直接得知，只能推測？',
+   o:['軒的東邊過去曾是廚房，往來者要從軒前經過','軒的西邊與內室（中閨）相連','軒的門窗原本朝北，因此不易得到日照','歸家的大門開在宅院東側'],
+   a:[3], ex:'(A)「軒東故嘗為廚，人往，從軒前過」；(B)「室西連於中閨」；(C)「又北向，不能得日」。大門位置原文未載——本模型標為「推測」。', key:'gate'},
+  {q:'（多選）關於本文的章法與情感，下列敘述哪些正確？',
+   o:['首段寫軒的修葺與景致，情調以「喜」為主','「然余居於此，多可喜，亦多可悲」承上啟下，轉入悲情','文中追憶的大母、先妣、亡妻，形象皆藉老嫗轉述呈現','「軒凡四遭火，得不焚，殆有神護者」流露作者對此軒的珍視','補記以小妹「何謂閣子」之問，側寫夫妻間的親暱'],
+   a:[0,1,3,4], multi:true, ex:'(C) 錯：只有先妣藉老嫗轉述；大母是作者親身記憶，亡妻則由作者自述與小妹問語呈現。', key:null},
+];
+const quizState = QUIZ.map(() => ({sel:[], done:false, ok:false}));
+function renderQuiz(){
+  $('#quizBox').innerHTML = QUIZ.map((x,i) => `
+    <div class="card p-4" id="qz${i}">
+      <p class="font-bold leading-8">${i+1}. ${x.q}</p>
+      ${x.o.map((o,j) => `<button class="opt" data-i="${i}" data-j="${j}">(${'ABCDE'[j]}) ${o}</button>`).join('')}
+      ${x.multi ? `<button class="btn btn-zhu mt-2" data-submit="${i}">送出答案</button>` : ''}
+      <div class="fb mt-3 leading-8" style="display:none"></div>
+    </div>`).join('');
+  $$('.opt').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.i, j = +b.dataset.j, st = quizState[i]; if (st.done) return;
+    if (QUIZ[i].multi) { st.sel = st.sel.includes(j) ? st.sel.filter(v=>v!==j) : [...st.sel, j]; b.classList.toggle('sel'); SND.click(); }
+    else { st.sel = [j]; gradeQ(i); }
+  }));
+  $$('[data-submit]').forEach(b => b.addEventListener('click', () => gradeQ(+b.dataset.submit)));
+  updateScore();
+}
+function gradeQ(i){
+  const x = QUIZ[i], st = quizState[i]; st.done = true;
+  st.ok = st.sel.length === x.a.length && x.a.every(v => st.sel.includes(v));
+  $$(`#qz${i} .opt`).forEach((b,j) => { if (x.a.includes(j)) b.classList.add('right'); else if (st.sel.includes(j)) b.classList.add('wrong'); });
+  const fb = $(`#qz${i} .fb`);
+  fb.innerHTML = `<b style="color:${st.ok?'#3f7a45':'#a8322a'}">${st.ok?'✔ 答對了！':'✘ 再想想。'}</b> 正解：${x.a.map(v=>'ABCDE'[v]).join('')}。${x.ex}` + (x.key ? ` <button class="btn mt-1" data-goto="${x.key}">🔎 在模型中查看</button>` : '');
+  show(fb); st.ok ? SND.right() : SND.wrong();
+  const g = fb.querySelector('[data-goto]'); if (g) g.addEventListener('click', () => { document.getElementById('model').scrollIntoView({behavior:'smooth'}); setTimeout(() => openCard(g.dataset.goto), 500); });
+  updateScore();
+}
+function updateScore(){ const d = quizState.filter(s=>s.done).length, ok = quizState.filter(s=>s.ok).length; $('#quizScore').textContent = d ? `得分 ${ok} / ${QUIZ.length}` : ''; }
+
+/* =========================================================
+   七、初始化（不依賴 3D；3D 失敗時仍可使用）
+========================================================= */
+function webglOK(){ try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch(e){ return false; } }
+function useFallback(msg){
+  if (APP.ready3d) return;
+  hide($('#loading')); hide($('#minimap')); hide($('#hud')); show($('#fallback2d'));
+  if (!$('#bigplan').innerHTML) buildPlan($('#bigplan'), true);
+  if (msg) console.warn('[項脊軒] 使用 2D 備援：', msg);
+  setStage(APP.stage);
+}
+APP.useFallback = useFallback;
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildPlan($('#minimap'), false);
+  $('#tlDots').innerHTML = STAGES.map((s,i) => `<div class="tl-dot" data-i="${i}">${s.k}</div>`).join('');
+  $$('.tl-dot').forEach(d => d.addEventListener('click', () => setStage(+d.dataset.i, true)));
+  buildAcc(); renderQuiz(); setStage(8);
+
+  // 音效開關（首次觸控時解鎖 AudioContext）
+  const mb = $('#muteBtn'); const syncMute = () => mb.textContent = SND.muted ? '🔇 靜音' : '🔊 音效'; syncMute();
+  mb.addEventListener('click', () => { SND.setMuted(!SND.muted); syncMute(); SND.click(); });
+  window.addEventListener('pointerdown', () => SND.unlock(), {once:true});
+
+  // 燈箱
+  $('#lbClose').addEventListener('click', closeCard);
+  $('#lightbox').addEventListener('click', e => { if (e.target.id === 'lightbox') closeCard(); });
+  $('#lbPrev').addEventListener('click', () => stepCard(-1)); $('#lbNext').addEventListener('click', () => stepCard(1));
+  $('#lbFly').addEventListener('click', () => { closeCard(); document.getElementById('model').scrollIntoView({behavior:'smooth'}); if (X3()) X3().fly(HOT[APP.current].cam); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); if ($('#lightbox').style.display !== 'none') { if (e.key==='ArrowRight') stepCard(1); if (e.key==='ArrowLeft') stepCard(-1); } });
+
+  // 時間軸
+  $('#tlSlider').addEventListener('input', e => setStage(+e.target.value, true));
+  $('#tlPrev').addEventListener('click', () => setStage(APP.stage-1, true));
+  $('#tlNext').addEventListener('click', () => setStage(APP.stage+1, true));
+  $('#tlPlay').addEventListener('click', tlPlay);
+
+  // 鏡頭
+  $$('[data-cam]').forEach(b => b.addEventListener('click', () => { SND.whoosh(); if (X3()) X3().fly(CAMS[b.dataset.cam]); }));
+  // 修葺前後
+  $('#btnBefore').addEventListener('click', () => { APP.repaired = false; syncRepairBtns(); SND.drip(); if (X3()) X3().setRepaired(false); });
+  $('#btnAfter').addEventListener('click', () => { APP.repaired = true; syncRepairBtns(); SND.pluck(4); if (X3()) X3().setRepaired(true); });
+  // 時刻
+  const ts = $('#timeSlider');
+  const setTime = t => { APP.time = t; ts.value = t; $('#timeLbl').textContent = APP.night ? '三五之夜' : timeText(t); if (X3()) X3().setTime(t); };
+  APP.setTime = setTime;
+  ts.addEventListener('input', e => { if (APP.night) toggleNight(false); setTime(+e.target.value); });
+  $('#btnPlaySun').addEventListener('click', () => {
+    const b = $('#btnPlaySun');
+    if (sunTimer) { clearInterval(sunTimer); sunTimer = null; b.textContent = '▶ 日影流轉'; b.classList.remove('on'); return; }
+    if (APP.night) toggleNight(false);
+    b.textContent = '❚❚ 暫停'; b.classList.add('on'); let t = +ts.value >= 17.9 ? 6 : +ts.value;
+    sunTimer = setInterval(() => { t += 0.05; if (t > 18) t = 6; setTime(t); }, 50);
+  });
+  function toggleNight(v){
+    APP.night = v; $('#btnNight').classList.toggle('on', v); $('#timeLbl').textContent = v ? '三五之夜' : timeText(APP.time);
+    if (v && sunTimer) $('#btnPlaySun').click();
+    if (v) SND.pluck(5);
+    if (X3()) X3().setNight(v);
+  }
+  $('#btnNight').addEventListener('click', () => toggleNight(!APP.night));
+  // 其他
+  $('#btnLabels').addEventListener('click', e => { const on = !e.currentTarget.classList.contains('on'); e.currentTarget.classList.toggle('on', on); $('#labels').style.display = on ? 'block' : 'none'; });
+  $('#btnRotate').addEventListener('click', e => { const on = !e.currentTarget.classList.contains('on'); e.currentTarget.classList.toggle('on', on); if (X3()) X3().autoRotate(on); });
+  $('#btnSteps').addEventListener('click', () => { if (X3()) { X3().fly(HOT.passage.cam); X3().footsteps(); } });
+  $('#fsBtn').addEventListener('click', () => {
+    const v = $('#viewer');
+    if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    if (v.classList.contains('pseudo-fs')) { v.classList.remove('pseudo-fs'); return; }
+    const req = v.requestFullscreen || v.webkitRequestFullscreen;
+    if (req) req.call(v).catch(() => v.classList.add('pseudo-fs')); else v.classList.add('pseudo-fs');
+  });
+
+  // WebGL 偵測與逾時備援
+  if (!webglOK()) useFallback('WebGL 不可用');
+  else setTimeout(() => { if (!APP.ready3d) useFallback('3D 模組載入逾時'); }, 15000);
+});
+</script>
+<script type="module">
+/* =========================================================
+   八、Three.js 3D 模型
+   座標：x→東、z→南（北為 -z）、y→上；1 單位 ≈ 1 公尺
+========================================================= */
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+try {
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const viewer = document.getElementById('viewer');
+const canvas = document.getElementById('c3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const DAY_BG = new THREE.Color('#e9e0cc'), NIGHT_BG = new THREE.Color('#141b2b');
+scene.background = DAY_BG.clone();
+scene.fog = new THREE.Fog(DAY_BG.clone(), 45, 95);
+
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
+camera.position.set(...CAMS.overview.p);
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(...CAMS.overview.t);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minDistance = 0.3; controls.maxDistance = 70;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.autoRotateSpeed = 0.6;
+
+/* ---------- 材質（低多邊形 + Lambert，平板友善） ---------- */
+const L = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o });
+const MAT = {
+  wall: L('#efe8d8'), wallOld: L('#b9ad95'), tile: L('#3b3d44'), tileOld: L('#6a6258'), tileNew: L('#2c3442'),
+  wood: L('#7a3b26'), woodD: L('#4a2a1c'), ground: L('#d9cdb2'), pave: L('#c4b89e'), stone: L('#a9a08c'),
+  grass: L('#8a9a5b'), gui: L('#4d7a3e', { flatShading: true }), loq: L('#2f5e33', { flatShading: true }),
+  bamboo: L('#6f9a4a'), trunk: L('#5a3d2b'), book: [L('#8b3a2e'), L('#2f4f6b'), L('#c9a24a'), L('#4d6b4a')],
+  fence: L('#a88f5a'), floor: L('#8c6a4a'), animal: L('#e8dcc4'), dog: L('#8a6a45'), hole: new THREE.MeshBasicMaterial({ color: '#141210' }),
+};
+const lineMat = new THREE.LineBasicMaterial({ color: '#2b2622', transparent: true, opacity: 0.5 });
+const pickables = [];
+
+// 工具：建立方塊（含白描輪廓線、陰影）
+function box(w, h, d, mat, x, y, z, edges = true, parent = scene) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
+  if (edges) m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), lineMat));
+  parent.add(m); return m;
+}
+// 工具：註冊可點選物件
+function pick(obj, key) { obj.traverse(o => { if (o.isMesh) { o.userData.key = key; pickables.push(o); } }); return obj; }
+// 工具：硬山式屋頂（內凹曲線斷面擠出），axis='x' 表示屋脊東西向
+function roof(w, d, rise, oh, mat, axis = 'x') {
+  const span = (axis === 'x' ? d : w) / 2 + oh, len = (axis === 'x' ? w : d) + oh * 0.6;
+  const s = new THREE.Shape();
+  s.moveTo(-span, -0.05); s.lineTo(-span, 0.08);
+  s.quadraticCurveTo(-span * 0.45, rise * 0.22, 0, rise);
+  s.quadraticCurveTo(span * 0.45, rise * 0.22, span, 0.08); s.lineTo(span, -0.05); s.lineTo(-span, -0.05);
+  const g = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false, curveSegments: 6 });
+  g.translate(0, 0, -len / 2); if (axis === 'x') g.rotateY(Math.PI / 2);
+  const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true;
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 25), lineMat));
+  // 屋脊
+  const r = new THREE.Mesh(new THREE.BoxGeometry(axis === 'x' ? len : 0.22, 0.2, axis === 'x' ? 0.22 : len), MAT.tile);
+  r.position.y = rise + 0.02; r.castShadow = true; m.add(r);
+  return m;
+}
+// 工具：一般建築（牆身 + 屋頂 + 正面門扇裝飾）
+function building({ x0, z0, x1, z1, h, rise, axis = 'x', face = 's', key, roofMat = MAT.tile }) {
+  const g = new THREE.Group(), w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  box(w, h, d, MAT.wall, cx, h / 2, cz, true, g);
+  box(w + 0.1, 0.35, d + 0.1, MAT.stone, cx, 0.17, cz, false, g); // 台基
+  const r = roof(w, d, rise, 0.45, roofMat, axis); r.position.set(cx, h, cz); g.add(r);
+  // 正面木格門窗（朱栗色）
+  const n = Math.max(2, Math.round((face === 's' || face === 'n' ? w : d) / 1.6));
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    if (face === 's' || face === 'n') box(w / n * 0.7, h * 0.62, 0.06, MAT.wood, x0 + t * w, h * 0.38, face === 's' ? z1 + 0.03 : z0 - 0.03, true, g);
+    else box(0.06, h * 0.62, d / n * 0.7, MAT.wood, face === 'e' ? x1 + 0.03 : x0 - 0.03, h * 0.38, z0 + t * d, true, g);
+  }
+  scene.add(g); if (key) pick(g, key); return g;
+}
+
+/* ---------- 地面、庭院 ---------- */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(140, 140), MAT.ground);
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const courtPave = new THREE.Mesh(new THREE.PlaneGeometry(15.2, 8.3), MAT.pave);
+courtPave.rotation.x = -Math.PI / 2; courtPave.position.set(0, 0.01, -2.35); courtPave.receiveShadow = true; scene.add(courtPave);
+const smallCourt = new THREE.Mesh(new THREE.PlaneGeometry(6, 4.4), MAT.grass);
+smallCourt.rotation.x = -Math.PI / 2; smallCourt.position.set(0, 0.015, 4.2); smallCourt.receiveShadow = true; scene.add(smallCourt); pick(smallCourt, 'court');
+// 軒前過道（石板動線：中閨前 → 軒前 → 東廚）
+const passG = new THREE.Group();
+for (let x = -6; x <= 3.6; x += 0.6) box(0.5, 0.04, 0.55, MAT.stone, x, 0.03, 5.2, false, passG);
+scene.add(passG); pick(passG, 'passage');
+
+/* ---------- 外圍牆 ---------- */
+const outer = new THREE.Group();
+const OW = [[-12, -12.4, 12, -12.4], [-12, 11.2, 12, 11.2], [-12, -12.4, -12, 11.2], [12, -12.4, 12, 3], [12, 4.4, 12, 11.2]];
+OW.forEach(([a, b, c, d]) => {
+  const len = Math.hypot(c - a, d - b), cx = (a + c) / 2, cz = (b + d) / 2, alongX = Math.abs(c - a) > 0.01;
+  box(alongX ? len : 0.3, 3, alongX ? 0.3 : len, MAT.wall, cx, 1.5, cz, true, outer);
+  box(alongX ? len + 0.2 : 0.55, 0.16, alongX ? 0.55 : len + 0.2, MAT.tile, cx, 3.08, cz, false, outer);
+});
+scene.add(outer);
+
+/* ---------- 主要建築（推測配置） ---------- */
+building({ x0: -6, z0: -12, x1: 6, z1: -6.5, h: 4.6, rise: 2.2, axis: 'x', face: 's', key: 'hall' });
+building({ x0: -11.6, z0: -6, x1: -7.6, z1: 1, h: 3.5, rise: 1.6, axis: 'z', face: 'e', key: 'wings' });
+building({ x0: 7.6, z0: -6, x1: 11.6, z1: 1, h: 3.5, rise: 1.6, axis: 'z', face: 'w', key: 'wings' });
+building({ x0: -9, z0: 6.2, x1: -1.8, z1: 10.6, h: 3.4, rise: 1.6, axis: 'x', face: 'n', key: 'zhonggui' });
+const kitchen = building({ x0: 1.8, z0: 6.2, x1: 8, z1: 10.6, h: 3.9, rise: 1.7, axis: 'x', face: 'n', key: 'kitchen' });
+box(0.6, 1.6, 0.6, MAT.wallOld, 6.6, 5.6, 9.2, true, kitchen); // 灶煙囪
+// 大門（東側，推測）
+const gate = new THREE.Group();
+box(0.25, 3.4, 0.25, MAT.wood, 12, 1.7, 3, true, gate); box(0.25, 3.4, 0.25, MAT.wood, 12, 1.7, 4.4, true, gate);
+box(0.12, 2.6, 0.65, MAT.woodD, 12.1, 1.3, 3.36, true, gate); box(0.12, 2.6, 0.65, MAT.woodD, 12.1, 1.3, 4.04, true, gate);
+const gr = roof(1.6, 2.4, 0.7, 0.2, MAT.tile, 'z'); gr.position.set(12, 3.4, 3.7); gate.add(gr);
+scene.add(gate); pick(gate, 'gate');
+
+/* =========================================================
+   項脊軒（核心）：x -1.6~1.6, z 6.4~9.6（方丈≈3.2m），牆高 3m
+========================================================= */
+const XUAN = { x0: -1.6, x1: 1.6, z0: 6.4, z1: 9.6, h: 3.0 };
+const xuan = new THREE.Group(); scene.add(xuan);
+const xuanWalls = [];
+// 東、西、南牆
+xuanWalls.push(box(0.2, 3, 3.2, MAT.wall, -1.5, 1.5, 8, true, xuan));
+xuanWalls.push(box(0.2, 3, 3.2, MAT.wall, 1.5, 1.5, 8, true, xuan));
+xuanWalls.push(box(3.2, 3, 0.2, MAT.wall, 0, 1.5, 9.5, true, xuan));
+box(3.4, 0.25, 3.4, MAT.stone, 0, 0.12, 8, false, xuan);
+const floorIn = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 2.9), MAT.floor); floorIn.rotation.x = -Math.PI / 2; floorIn.position.set(0, 0.26, 8); floorIn.receiveShadow = true; xuan.add(floorIn);
+pick(xuan, 'xuan');
+// 北牆（前牆）：依開口生成牆塊
+function wallWithOpenings(width, h, th, z, openings, mat, parent) {
+  const g = new THREE.Group(), x0 = -width / 2; let cur = x0;
+  const ops = [...openings].sort((a, b) => a.x0 - b.x0);
+  ops.forEach(o => {
+    if (o.x0 > cur) box(o.x0 - cur, h, th, mat, (cur + o.x0) / 2, h / 2, z, true, g);
+    if (o.y0 > 0) box(o.x1 - o.x0, o.y0, th, mat, (o.x0 + o.x1) / 2, o.y0 / 2, z, true, g);
+    box(o.x1 - o.x0, h - o.y1, th, mat, (o.x0 + o.x1) / 2, (h + o.y1) / 2, z, true, g);
+    cur = o.x1;
+  });
+  if (cur < -x0) box(-x0 - cur, h, th, mat, (cur - x0) / 2, h / 2, z, true, g);
+  parent.add(g); return g;
+}
+const DOOR = { x0: -0.42, x1: 0.42, y0: 0.25, y1: 2.15 };
+const WINS = [-1.18, -0.7, 0.7, 1.18].map(c => ({ x0: c - 0.2, x1: c + 0.2, y0: 1.0, y1: 1.9 }));
+const northOld = wallWithOpenings(3.2, 3, 0.2, 6.5, [DOOR], MAT.wallOld, xuan); pick(northOld, 'xuan');
+const northNew = wallWithOpenings(3.2, 3, 0.2, 6.5, [DOOR, ...WINS], MAT.wall, xuan);
+// 窗櫺（木格）
+WINS.forEach(o => {
+  for (let i = 1; i < 3; i++) box(0.03, o.y1 - o.y0, 0.04, MAT.wood, o.x0 + (o.x1 - o.x0) * i / 3, (o.y0 + o.y1) / 2, 6.42, false, northNew);
+  for (let i = 1; i < 4; i++) box(o.x1 - o.x0, 0.03, 0.04, MAT.wood, (o.x0 + o.x1) / 2, o.y0 + (o.y1 - o.y0) * i / 4, 6.42, false, northNew);
+});
+pick(northNew, 'window');
+// 門扇（半開）＋門檻
+const doorG = new THREE.Group(); xuan.add(doorG);
+[-1, 1].forEach(sd => {
+  const piv = new THREE.Group(); piv.position.set(sd * 0.42, 0, 6.5); piv.rotation.y = sd * 1.1; doorG.add(piv);
+  box(0.4, 1.9, 0.05, MAT.woodD, -sd * 0.2, 1.2, 0, true, piv);
+});
+box(0.9, 0.1, 0.2, MAT.woodD, 0, 0.3, 6.5, false, doorG);
+pick(doorG, 'door');
+// 庭階（石階）
+const step = box(1.3, 0.14, 0.5, MAT.stone, 0, 0.07, 6.15, true); pick(step, 'court');
+// 欄楯（軒前低欄杆，門兩側）
+const railG = new THREE.Group(); scene.add(railG);
+[[-1.6, -0.6], [0.6, 1.6]].forEach(([a, b]) => {
+  for (let x = a; x <= b + 0.01; x += 0.5) box(0.07, 0.75, 0.07, MAT.wood, x, 0.38, 5.95, false, railG);
+  box(b - a, 0.06, 0.08, MAT.wood, (a + b) / 2, 0.72, 5.95, false, railG);
+  box(b - a, 0.05, 0.06, MAT.wood, (a + b) / 2, 0.35, 5.95, false, railG);
+});
+pick(railG, 'railing');
+// 屋頂（可傾塌）＋破洞
+const roofPivot = new THREE.Group(); roofPivot.position.set(0, 3, 8); xuan.add(roofPivot);
+const xuanRoof = roof(3.2, 3.2, 1.3, 0.4, MAT.tileOld, 'x'); roofPivot.add(xuanRoof); pick(xuanRoof, 'xuan');
+const holes = new THREE.Group(); roofPivot.add(holes);
+[[-0.7, 0.55, -0.8], [0.5, 0.7, -0.55], [0.2, 0.45, 1.0], [-0.9, 0.35, 1.25]].forEach(([x, y, z]) => {
+  const hm = new THREE.Mesh(new THREE.CircleGeometry(0.22, 7), MAT.hole);
+  hm.position.set(x, y + 0.06, z); hm.rotation.x = z < 0 ? -Math.PI / 2 + 0.7 : -Math.PI / 2 - 0.7; holes.add(hm);
+});
+// 披檐（復葺後「其制稍異於前」之示意，推測）
+const eave = new THREE.Group(); xuan.add(eave);
+const ev = box(3.6, 0.08, 0.7, MAT.tileNew, 0, 2.35, 6.15, true, eave); ev.rotation.x = 0.35;
+// 室內：書架（借書滿架）
+const shelf = new THREE.Group(); xuan.add(shelf);
+box(0.35, 2.0, 1.4, MAT.woodD, -1.2, 1.25, 8.5, true, shelf);
+for (let r = 0; r < 4; r++) for (let i = 0; i < 6; i++)
+  box(0.22, 0.32, 0.12, MAT.book[(r + i) % 4], -1.12, 0.55 + r * 0.45, 7.95 + i * 0.2, false, shelf);
+pick(shelf, 'shelf');
+// 几案＋書冊＋坐墩
+const desk = new THREE.Group(); xuan.add(desk);
+box(1.1, 0.06, 0.55, MAT.wood, 0.6, 0.98, 7.0, true, desk);
+[[-0.5, -0.22], [0.5, -0.22], [-0.5, 0.22], [0.5, 0.22]].forEach(([dx, dz]) => box(0.05, 0.7, 0.05, MAT.wood, 0.6 + dx, 0.62, 7.0 + dz, false, desk));
+box(0.3, 0.04, 0.22, MAT.book[2], 0.45, 1.03, 7.0, false, desk);
+box(0.35, 0.45, 0.35, MAT.woodD, 0.6, 0.48, 7.7, true, desk);
+pick(desk, 'desk');
+// 象笏（大母所贈）掛在南牆
+box(0.06, 0.5, 0.02, L('#efe6cf'), 0.9, 1.7, 9.38, false, xuan);
+
+/* ---------- 垣牆周庭（軒前小庭圍牆，修葺後出現） ---------- */
+const courtWalls = new THREE.Group(); scene.add(courtWalls);
+const cwN = box(6.25, 2.8, 0.25, MAT.wall, 0, 1.4, 2, true, courtWalls);
+box(6.5, 0.14, 0.5, MAT.tile, 0, 2.86, 2, false, courtWalls);
+// 東西側牆（留小門，供人往東廚經過）
+[-3, 3].forEach(x => {
+  box(0.25, 2.6, 2.5, MAT.wall, x, 1.3, 3.25, true, courtWalls);
+  box(0.25, 2.6, 0.5, MAT.wall, x, 1.3, 6.1, true, courtWalls);
+  box(0.25, 0.6, 1.4, MAT.wall, x, 2.3, 5.15, true, courtWalls);
+  box(0.5, 0.12, 4.4, MAT.tile, x, 2.66, 4.2, false, courtWalls);
+});
+pick(courtWalls, 'yuanqiang');
+// 牆面光暈（白天反光、夜間月光）：放在北牆南面
+const wallGlow = new THREE.Mesh(new THREE.PlaneGeometry(6, 1), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false }));
+wallGlow.position.set(0, 1.4, 2.135); scene.add(wallGlow);
+
+/* ---------- 植栽：桂、竹、蘭、枇杷 ---------- */
+function tree(x, z, trunkH, crowns, mat, key) {
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.13, trunkH, 6), MAT.trunk); tr.position.y = trunkH / 2; tr.castShadow = true; g.add(tr);
+  const crown = new THREE.Group(); crown.position.y = trunkH; g.add(crown);
+  crowns.forEach(([cx, cy, cz, r, sy = 1]) => { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), mat); c.position.set(cx, cy, cz); c.scale.y = sy; c.castShadow = true; c.receiveShadow = true; crown.add(c); });
+  scene.add(g); pick(g, key); g.userData.crown = crown; return g;
+}
+const gui = tree(-2.0, 4.0, 1.5, [[0, 0.5, 0, 0.75], [0.45, 0.85, 0.2, 0.55], [-0.4, 0.9, -0.1, 0.55], [0.1, 1.3, 0, 0.45]], MAT.gui, 'gui');
+const loquat = tree(2.2, 3.2, 2.0, [[0, 0.9, 0, 1.3, 0.42], [0.5, 0.7, 0.35, 0.8, 0.5], [-0.5, 0.75, -0.3, 0.8, 0.5]], MAT.loq, 'loquat');
+loquat.scale.setScalar(0.001);
+const plants = new THREE.Group(); scene.add(plants);
+for (let i = 0; i < 9; i++) { // 竹
+  const h = 3.2 + Math.random() * 1.2, x = -2.55 + (i % 3) * 0.22 + Math.random() * 0.1, z = 2.4 + Math.floor(i / 3) * 0.25;
+  const s = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, h, 5), MAT.bamboo); s.position.set(x, h / 2, z); s.rotation.z = (Math.random() - 0.5) * 0.12; s.castShadow = true; plants.add(s);
+  const lf = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.9, 5), MAT.gui); lf.position.set(x, h - 0.2, z); lf.castShadow = true; plants.add(lf);
+}
+[[-2.5, 5.7], [2.5, 2.5], [-0.9, 5.75], [0.95, 5.75], [2.5, 5.7]].forEach(([x, z]) => { // 蘭
+  for (let k = 0; k < 5; k++) { const b = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.45, 3), MAT.bamboo); b.position.set(x + (Math.random() - 0.5) * 0.25, 0.22, z + (Math.random() - 0.5) * 0.2); b.rotation.set((Math.random() - 0.5) * 0.8, 0, (Math.random() - 0.5) * 0.8); plants.add(b); }
+});
+pick(plants, 'plants');
+// 室壞不修：雜草
+const weeds = new THREE.Group(); scene.add(weeds);
+for (let i = 0; i < 40; i++) { const b = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.5, 3), MAT.grass); b.position.set(-2.6 + Math.random() * 5.2, 0.25, 2.4 + Math.random() * 3.4); b.rotation.z = (Math.random() - 0.5) * 0.6; weeds.add(b); }
+
+/* ---------- 庭中隔斷：籬（InstancedMesh）與牆 ---------- */
+const SEGS = [[-7.6, -1.5, -1.2, -1.5], [0, -1.5, 7.6, -1.5], [0, -6.5, 0, -3.2]];
+const fenceG = new THREE.Group(), pwallG = new THREE.Group(); scene.add(fenceG, pwallG);
+const postPos = [];
+SEGS.forEach(([a, b, c, d]) => {
+  const len = Math.hypot(c - a, d - b), alongX = Math.abs(c - a) > 0.01, n = Math.round(len / 0.35);
+  for (let i = 0; i <= n; i++) postPos.push([a + (c - a) * i / n, b + (d - b) * i / n]);
+  [0.5, 1.1].forEach(y => box(alongX ? len : 0.05, 0.05, alongX ? 0.05 : len, MAT.fence, (a + c) / 2, y, (b + d) / 2, false, fenceG));
+  box(alongX ? len : 0.28, 2.6, alongX ? 0.28 : len, MAT.wall, (a + c) / 2, 1.3, (b + d) / 2, true, pwallG);
+  box(alongX ? len + 0.1 : 0.5, 0.14, alongX ? 0.5 : len + 0.1, MAT.tile, (a + c) / 2, 2.66, (b + d) / 2, false, pwallG);
+});
+const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.035, 0.04, 1.5, 5), MAT.fence, postPos.length);
+const tmp = new THREE.Object3D();
+postPos.forEach(([x, z], i) => { tmp.position.set(x, 0.75, z); tmp.rotation.z = (Math.random() - 0.5) * 0.08; tmp.updateMatrix(); posts.setMatrixAt(i, tmp.matrix); });
+posts.castShadow = true; fenceG.add(posts);
+pick(fenceG, 'partition'); pick(pwallG, 'partition');
+// 雞犬（分家後的雜亂）
+const animals = new THREE.Group(); scene.add(animals);
+function dog(x, z, ry) { const g = new THREE.Group(); box(0.6, 0.3, 0.25, MAT.dog, 0, 0.45, 0, false, g); box(0.25, 0.22, 0.2, MAT.dog, 0.38, 0.65, 0, false, g); [-0.22, 0.22].forEach(dx => [-0.08, 0.08].forEach(dz => box(0.06, 0.3, 0.06, MAT.dog, dx, 0.15, dz, false, g))); g.position.set(x, 0, z); g.rotation.y = ry; animals.add(g); }
+dog(3.2, -3.8, Math.PI); dog(-3.2, -3.8, 0);
+for (let i = 0; i < 4; i++) { const g = new THREE.Group(); box(0.22, 0.2, 0.15, MAT.animal, 0, 0.2, 0, false, g); box(0.08, 0.1, 0.08, MAT.animal, 0.13, 0.33, 0, false, g); box(0.04, 0.05, 0.03, MAT.wood, 0.14, 0.4, 0, false, g); g.position.set(-2 + i * 1.3, 0.35, -6.3 + (i % 2) * 0.3); g.rotation.y = i; animals.add(g); }
+pick(animals, 'partition');
+
+/* ---------- 光照：太陽／月亮（同一盞可投影光源，省效能） ---------- */
+const hemi = new THREE.HemisphereLight('#fff6e6', '#b5a586', 1.3); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff2d6', 2.6);
+sun.castShadow = true; sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
+Object.assign(sun.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 90 });
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+const sunBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 12), new THREE.MeshBasicMaterial({ color: '#f3b64a', fog: false })); scene.add(sunBall);
+const moonBall = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 12), new THREE.MeshBasicMaterial({ color: '#f4f1e2', fog: false })); scene.add(moonBall);
+// 星空
+const starGeo = new THREE.BufferGeometry(), sp = [];
+for (let i = 0; i < 400; i++) { const th = Math.random() * Math.PI * 2, ph = Math.random() * 1.3; sp.push(Math.cos(th) * Math.sin(ph) * 120, Math.cos(ph) * 120, Math.sin(th) * Math.sin(ph) * 120); }
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: '#fff', size: 0.6, fog: false })); scene.add(stars);
+// 室內光（亮度依「北向／反照」計算）
+const roomLight = new THREE.PointLight('#ffe2a8', 0, 6, 1.2); roomLight.position.set(0, 2.2, 7.6); scene.add(roomLight);
+
+/* ---------- 日影反照：金色光點路徑 ---------- */
+const photons = new THREE.Group(); scene.add(photons);
+const phMat = new THREE.MeshBasicMaterial({ color: '#ffcf5a', transparent: true, opacity: 0.95 });
+const phGeo = new THREE.SphereGeometry(0.045, 8, 6);
+const rays = WINS.map(o => ({ cx: (o.x0 + o.x1) / 2, dots: [0, 1, 2, 3, 4].map(i => { const m = new THREE.Mesh(phGeo, phMat); photons.add(m); return { m, off: i / 5 }; }) }));
+const rayLines = new THREE.Group(); photons.add(rayLines);
+const rayLineMat = new THREE.LineDashedMaterial({ color: '#d9a730', dashSize: 0.25, gapSize: 0.18, transparent: true, opacity: 0.7 });
+
+/* ---------- 雨漏（滴水） ---------- */
+const drips = new THREE.Group(); scene.add(drips);
+const dripMat = new THREE.MeshBasicMaterial({ color: '#9fc3e0', transparent: true, opacity: 0.85 });
+for (let i = 0; i < 18; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 4), dripMat); d.scale.y = 2.5; d.position.set(-1.1 + Math.random() * 2.2, Math.random() * 2.7, 6.9 + Math.random() * 2.3); drips.add(d); }
+for (let i = 0; i < 4; i++) { const p = new THREE.Mesh(new THREE.CircleGeometry(0.25 + Math.random() * 0.15, 12), new THREE.MeshBasicMaterial({ color: '#5a6f80', transparent: true, opacity: 0.35 })); p.rotation.x = -Math.PI / 2; p.position.set(-0.8 + i * 0.55, 0.27, 7.3 + (i % 2) * 1.2); drips.add(p); }
+
+/* ---------- 火（四遭火，得不焚） ---------- */
+const fire = new THREE.Group(); scene.add(fire); fire.visible = false;
+const fireMats = ['#ff7b25', '#ffb02e', '#e8431d'].map(c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+const flames = [];
+for (let i = 0; i < 22; i++) {
+  const f = new THREE.Mesh(new THREE.ConeGeometry(0.4 + Math.random() * 0.35, 1.6 + Math.random() * 1.4, 6), fireMats[i % 3]);
+  // 火焰位於東廚屋頂與中閨屋頂（推測：火多起於廚灶），軒本身得不焚
+  const east = i % 3 !== 0; f.position.set(east ? 2.4 + Math.random() * 3.6 : -4.8 + Math.random() * 2.6, 0, 6.8 + Math.random() * 3.2);
+  f.userData.by = east ? 4.6 : 4.0; f.userData.ph = Math.random() * 6; fire.add(f); flames.push(f);
+}
+const fireLight = new THREE.PointLight('#ff7a2a', 0, 14, 1.5); fireLight.position.set(2.5, 5, 8); fire.add(fireLight);
+let fireT = 0, fireCount = 0, fireOn = false;
+
+/* ---------- 足音（腳印動畫） ---------- */
+const steps = new THREE.Group(); scene.add(steps);
+const footMat = new THREE.MeshBasicMaterial({ color: '#3a2a20', transparent: true, opacity: 0.8 });
+const footGeo = new THREE.CircleGeometry(0.09, 10);
+let stepTimer = null;
+function footsteps() {
+  if (stepTimer) clearInterval(stepTimer);
+  steps.clear(); let i = 0; const path = []; for (let x = -6; x <= 3.6; x += 0.42) path.push([x, 5.2]); path.push([4.2, 5.6], [4.7, 6.0]);
+  stepTimer = setInterval(() => {
+    if (i >= path.length) { clearInterval(stepTimer); stepTimer = null; setTimeout(() => steps.clear(), 2500); return; }
+    const [x, z] = path[i]; const m = new THREE.Mesh(footGeo, footMat); m.rotation.x = -Math.PI / 2; m.scale.y = 1.7; m.position.set(x, 0.07, z + (i % 2 ? 0.12 : -0.12)); steps.add(m);
+    SND.step(); i++;
+  }, 380);
+  toast('余扃牖而居，久之，能以足音辨人', 3500);
+}
+
+/* ---------- 焦點光圈（朱紅） ---------- */
+const rings = [0, 1, 2].map(() => { const r = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), new THREE.MeshBasicMaterial({ color: '#c4473b', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false })); r.rotation.x = -Math.PI / 2; r.visible = false; scene.add(r); return r; });
+function setRings(keys) { rings.forEach((r, i) => { const h = HOT[keys[i]]; r.visible = !!h; if (h) { r.position.set(h.ring[0], 0.08, h.ring[1]); r.userData.s = h.ring[2]; } }); }
+
+/* ---------- HTML 浮動標籤 ---------- */
+const labelBox = document.getElementById('labels');
+const labels = [];
+Object.entries(HOT).forEach(([k, h]) => {
+  const el = document.createElement('div');
+  el.className = 'lab' + (h.main ? ' main' : '') + (h.tag === '推測' ? ' guess' : '');
+  el.innerHTML = `${h.t.replace(/（.*）/, '')}${h.sub ? `<small>${h.sub}</small>` : ''}`;
+  el.addEventListener('click', e => { e.stopPropagation(); SND.click(); openCard(k); });
+  labelBox.appendChild(el); labels.push({ el, key: k, v: new THREE.Vector3(...h.label), h });
+});
+DIR_LABELS.forEach(d => { const el = document.createElement('div'); el.className = 'lab dir'; el.textContent = d.t; labelBox.appendChild(el); labels.push({ el, key: null, v: new THREE.Vector3(...d.p), h: { lvl: 1, grp: 'ext' } }); });
+const tv = new THREE.Vector3();
+function updateLabels(w, h) {
+  const inside = camera.position.x > XUAN.x0 && camera.position.x < XUAN.x1 && camera.position.z > XUAN.z0 && camera.position.z < XUAN.z1 && camera.position.y < 3;
+  labels.forEach(L => {
+    let vis = (L.h.grp === 'int') === inside;
+    if (!L.key && camera.position.length() < 20) vis = false; // 近景時隱藏方位字
+    if (L.key === 'loquat' && loquat.scale.x < 0.05) vis = false;
+    if (vis && L.h.lvl === 2 && !inside && camera.position.distanceTo(L.v) > 15) vis = false;
+    if (vis) { tv.copy(L.v).project(camera); if (tv.z > 1 || Math.abs(tv.x) > 1.1 || Math.abs(tv.y) > 1.1) vis = false; }
+    if (!vis) { if (L.el.style.display !== 'none') L.el.style.display = 'none'; return; }
+    if (L.el.style.display !== 'block') L.el.style.display = 'block';
+    L.el.style.transform = `translate(${(tv.x * 0.5 + 0.5) * w}px, ${(-tv.y * 0.5 + 0.5) * h}px) translate(-50%,-100%)`;
+  });
+}
+
+/* ---------- 提示字幕 ---------- */
+const toastEl = document.getElementById('toast'); let toastT = null;
+function toast(s, ms = 2500) { toastEl.textContent = s; toastEl.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => toastEl.style.opacity = 0, ms); }
+
+/* =========================================================
+   狀態套用：修葺、時間軸、日夜
+========================================================= */
+const S = { repaired: true, ruined: false, rebuilt: true, partition: 'wall', animals: false, loquat: 1, night: false, time: 12 };
+let loqTarget = 1, roofTilt = 0, roofTiltT = 0;
+function applyRepair() {
+  const rep = S.repaired && !S.ruined;
+  northOld.visible = !S.repaired; northNew.visible = S.repaired;
+  courtWalls.visible = S.repaired;
+  xuanRoof.material = rep ? (S.rebuilt ? MAT.tileNew : MAT.tile) : MAT.tileOld;
+  holes.visible = !rep; drips.visible = !rep; weeds.visible = S.ruined;
+  eave.visible = S.rebuilt && !S.ruined;
+  xuanWalls.forEach(w => w.material = rep ? MAT.wall : MAT.wallOld);
+  northNew.children.forEach(m => { if (m.isMesh && m.material !== MAT.wood) m.material = S.ruined ? MAT.wallOld : MAT.wall; });
+  roofTiltT = S.ruined ? 0.13 : 0;
+  updateLight();
+}
+function applyStage(st) {
+  Object.assign(S, st.s); APP.repaired = S.repaired;
+  fenceG.visible = S.partition === 'fence'; pwallG.visible = S.partition === 'wall';
+  animals.visible = S.animals; loqTarget = S.loquat;
+  if (S.animals) SND.bark();
+  setFire(!!st.s.fire);
+  applyRepair(); setRings(st.hl);
+}
+function setFire(on) {
+  fireOn = on; fire.visible = on; fireT = 0; fireCount = 0;
+  if (on) { toast('軒凡四遭火……', 2000); fly({ p: [9, 9, 18], t: [0, 1.5, 7] }); }
+}
+
+// 太陽方向：6 時自東升，12 時在南方高空，18 時西落（約北緯 31°、秋分前後示意）
+function sunDir(t) {
+  const th = (t - 6) / 12 * Math.PI, el = Math.max(0.03, Math.sin(th) * THREE.MathUtils.degToRad(56));
+  return new THREE.Vector3(Math.cos(th) * Math.cos(el), Math.sin(el), Math.sin(th) * Math.cos(el));
+}
+const MOON_DIR = new THREE.Vector3(0.22, Math.sin(THREE.MathUtils.degToRad(28)), Math.cos(THREE.MathUtils.degToRad(28))).normalize();
+// 北牆受光比例：軒高（約 3.6m 有效高度）在 4.4m 外牆面投下的影高
+function wallLitFrac(dir) { if (dir.z <= 0.02) return 0; const sh = 3.6 - 4.4 * dir.y / dir.z; return THREE.MathUtils.clamp((2.8 - sh) / 2.8, 0, 1); }
+let reflectK = 0;
+function updateLight() {
+  const hud = document.getElementById('hudNote'), rep = S.repaired && !S.ruined;
+  let lux, note;
+  if (S.night) {
+    sun.position.copy(MOON_DIR).multiplyScalar(40); sun.color.set('#b8c8f0'); sun.intensity = 1.9;
+    hemi.color.set('#5a6a90'); hemi.groundColor.set('#1d2233'); hemi.intensity = 0.32;
+    scene.background.copy(NIGHT_BG); scene.fog.color.copy(NIGHT_BG);
+    moonBall.visible = true; sunBall.visible = false; stars.visible = true; moonBall.position.copy(MOON_DIR).multiplyScalar(90);
+    const f = rep ? wallLitFrac(MOON_DIR) : 0;
+    wallGlow.material.color.set('#cfdcff'); wallGlow.material.opacity = f * 0.22; wallGlow.scale.y = Math.max(0.01, f * 2.8); wallGlow.position.y = 2.8 - f * 1.4;
+    reflectK = 0; lux = rep ? 0.14 : 0.03;
+    note = rep ? `明月半牆：牆面約 ${Math.round(f * 100)}% 受月光，下半被軒頂遮住。桂影隨風搖動。` : '修葺前尚無「垣牆周庭」，請切換「修葺後」。';
+    roomLight.color.set('#ffcf88'); roomLight.intensity = 1.6; // 夜讀燈火
+  } else {
+    const d = sunDir(S.time), el = d.y;
+    sun.position.copy(d).multiplyScalar(40); sun.color.setHSL(0.1, 0.8, 0.75 + el * 0.2); sun.intensity = 0.6 + 2.4 * Math.min(1, el * 2.2);
+    hemi.color.set('#fff6e6'); hemi.groundColor.set('#b5a586'); hemi.intensity = 0.6 + 0.8 * Math.min(1, el * 2);
+    const warm = new THREE.Color('#f0c9a0').lerp(DAY_BG, Math.min(1, el * 2.5));
+    scene.background.copy(warm); scene.fog.color.copy(warm);
+    moonBall.visible = false; stars.visible = false; sunBall.visible = true; sunBall.position.copy(d).multiplyScalar(90);
+    const lit = wallLitFrac(d), sky = Math.min(1, el * 2);
+    reflectK = rep ? lit * Math.min(1, d.z * 1.4) * Math.min(1, el * 3) : 0;
+    wallGlow.material.color.set('#ffd27a'); wallGlow.material.opacity = rep ? reflectK * 0.35 : 0; wallGlow.scale.y = Math.max(0.01, lit * 2.8); wallGlow.position.y = 2.8 - lit * 1.4;
+    if (rep) { lux = 0.05 + 0.2 * sky + 0.7 * reflectK; note = reflectK > 0.3 ? '日影反照：南日照亮垣牆，光經四窗反射入室，「室始洞然」。' : '日光尚低，牆面多在陰影中，反照有限。'; }
+    else { lux = (0.06 + 0.2 * sky) * (S.time > 12 ? 1 - 0.65 * Math.min(1, (S.time - 12) / 3) : 1); note = S.ruined ? '室壞不修：屋頂塌陷、雨漏重現。' : (S.time > 12 ? '北向不能得日，日過午已昏。' : '北向：門朝北，只得少許天光。'); }
+    roomLight.color.set('#ffe2a8'); roomLight.intensity = lux * 4.5;
+  }
+  sun.target.position.set(0, 0, 0);
+  document.getElementById('hudLux').textContent = Math.round(lux * 100) + '%';
+  document.getElementById('hudBar').style.width = Math.round(lux * 100) + '%';
+  hud.textContent = note;
+  photons.visible = !S.night && reflectK > 0.15;
+  buildRayLines();
+}
+// 光線路徑：太陽 → 牆面 → 窗 → 室內
+function rayPath(cx) {
+  const d = S.night ? MOON_DIR : sunDir(S.time);
+  const W = new THREE.Vector3(cx * 1.6, 2.2, 2.14), A = W.clone().addScaledVector(d, 6);
+  return [A, W, new THREE.Vector3(cx, 1.45, 6.45), new THREE.Vector3(cx * 0.6, 0.6, 8.6)];
+}
+function buildRayLines() {
+  rayLines.children.forEach(c => c.geometry.dispose()); rayLines.clear();
+  if (!photons.visible) return;
+  rays.forEach(r => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rayPath(r.cx)), rayLineMat); l.computeLineDistances(); rayLines.add(l); });
+}
+function along(pts, u) {
+  const seg = [], tot = []; let s = 0; for (let i = 1; i < pts.length; i++) { const l = pts[i].distanceTo(pts[i - 1]); seg.push(l); s += l; }
+  let d = u * s; for (let i = 0; i < seg.length; i++) { if (d <= seg[i]) return pts[i].clone().lerp(pts[i + 1], d / seg[i]); d -= seg[i]; } return pts[pts.length - 1].clone();
+}
+
+/* ---------- 鏡頭飛行（平滑補間） ---------- */
+let flyAnim = null;
+function fly(c) {
+  if (!c) return;
+  flyAnim = { p0: camera.position.clone(), t0: controls.target.clone(), p1: new THREE.Vector3(...c.p), t1: new THREE.Vector3(...c.t), s: performance.now(), d: 1400 };
+}
+function focus(key) { const h = HOT[key]; if (!h) return; setRings([key]); fly(h.cam); if (key === 'passage') footsteps(); }
+
+/* ---------- 點選（區分拖曳與點擊） ---------- */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+canvas.addEventListener('pointerup', e => {
+  if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8 || performance.now() - down.t > 600) return;
+  const r = canvas.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(pickables, false).find(h => h.object.visible && isVisibleUp(h.object));
+  if (hit) { SND.click(); openCard(hit.object.userData.key); }
+});
+function isVisibleUp(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
+canvas.addEventListener('pointermove', e => {
+  if (isTouch || e.buttons) return;
+  const r = canvas.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera); canvas.style.cursor = ray.intersectObjects(pickables, false).some(h => isVisibleUp(h.object)) ? 'pointer' : 'grab';
+});
+
+/* ---------- 尺寸 ---------- */
+let W = 1, H = 1;
+function resize() { W = viewer.clientWidth; H = viewer.clientHeight; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(viewer); resize();
+// 不在畫面中時暫停渲染（省電）
+let onScreen = true; new IntersectionObserver(es => onScreen = es[0].isIntersecting).observe(viewer);
+
+/* ---------- 主迴圈 ---------- */
+const clock = new THREE.Clock(); let miniT = 0, dripSndT = 0, crackT = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  if (!onScreen || document.hidden) return;
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  // 鏡頭補間
+  if (flyAnim) {
+    const k = Math.min(1, (performance.now() - flyAnim.s) / flyAnim.d), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+    camera.position.lerpVectors(flyAnim.p0, flyAnim.p1, e); controls.target.lerpVectors(flyAnim.t0, flyAnim.t1, e);
+    if (k >= 1) flyAnim = null;
+  }
+  controls.update();
+  // 枇杷生長、屋頂傾塌（平滑過渡）
+  const ls = THREE.MathUtils.lerp(loquat.scale.x, Math.max(0.001, loqTarget), Math.min(1, dt * 2.5)); loquat.scale.setScalar(ls);
+  HOT.loquat.label[1] = 0.6 + 4 * ls; labels.find(l => l.key === 'loquat').v.y = 0.6 + 4 * ls;
+  roofTilt = THREE.MathUtils.lerp(roofTilt, roofTiltT, Math.min(1, dt * 3)); roofPivot.rotation.z = roofTilt; roofPivot.position.y = 3 - roofTilt * 2.5;
+  // 桂樹隨風（夜間「風移影動」更明顯）
+  const amp = S.night ? 0.07 : 0.025;
+  gui.userData.crown.rotation.z = Math.sin(t * 1.4) * amp; gui.userData.crown.rotation.x = Math.sin(t * 0.9 + 1) * amp * 0.6;
+  loquat.userData.crown.rotation.z = Math.sin(t * 1.1 + 2) * amp * 0.5;
+  // 漏雨
+  if (drips.visible) {
+    drips.children.forEach((d, i) => { if (i < 18) { d.position.y -= dt * 3.2; if (d.position.y < 0.3) d.position.y = 2.9; d.visible = d.position.distanceTo(camera.position) > 0.9; } });
+    dripSndT += dt; if (dripSndT > 1.3 && camera.position.distanceTo(roomLight.position) < 14) { dripSndT = 0; SND.drip(); }
+  }
+  // 反照光點
+  if (photons.visible) rays.forEach(r => { const pts = rayPath(r.cx); r.dots.forEach(d => { d.m.position.copy(along(pts, (t * 0.25 + d.off) % 1)); d.m.visible = d.m.position.distanceTo(camera.position) > 1.2; }); });
+  // 四遭火
+  if (fireOn) {
+    fireT += dt; const cyc = 2.6, ph = fireT % cyc, burst = ph < 1.8;
+    if (fireT > cyc * (fireCount + 1) && fireCount < 4) { fireCount++; }
+    const active = fireCount < 4 && burst;
+    flames.forEach(f => { f.visible = active; const s = 0.7 + 0.4 * Math.sin(t * 12 + f.userData.ph); f.scale.set(s, s * (1 + Math.sin(t * 9 + f.userData.ph) * 0.3), s); f.position.y = f.userData.by + 0.5 * s; });
+    fireLight.intensity = active ? 30 + Math.sin(t * 20) * 10 : 0;
+    if (active) { crackT += dt; if (crackT > 0.12) { crackT = 0; SND.crackle(); } }
+    if (ph < dt * 1.5 && fireCount < 4) toast(`第 ${fireCount + 1} 次火……`, 1500);
+    if (fireCount >= 4 && fire.visible) { fire.visible = false; toast('軒凡四遭火，得不焚，殆有神護者', 4000); SND.pluck(5); }
+  }
+  // 光圈脈動
+  rings.forEach(r => { if (r.visible) { const s = r.userData.s * (1 + 0.08 * Math.sin(t * 3)); r.scale.set(s, s, s); r.material.opacity = 0.55 + 0.3 * Math.sin(t * 3); } });
+  renderer.render(scene, camera);
+  updateLabels(W, H);
+  // 小地圖相機標記（節流）
+  miniT += dt; if (miniT > 0.1) { miniT = 0; const dx = controls.target.x - camera.position.x, dz = controls.target.z - camera.position.z; APP.updateMini(camera.position.x, camera.position.z, Math.atan2(dz, dx)); }
+}
+
+/* ---------- 對外 API（供頁面 UI 呼叫） ---------- */
+window.XJ3D = {
+  fly, focus, footsteps, applyStage,
+  setRepaired(v) { S.repaired = v; S.ruined = false; applyRepair(); fly(v ? HOT.window.cam : { p: [0.9, 1.55, 9.25], t: [-0.3, 1.3, 6.6] }); toast(v ? '余稍為修葺，使不上漏；前闢四窗' : '塵泥滲漉，雨澤下注', 2500); },
+  setTime(t) { S.time = t; updateLight(); },
+  setNight(v) { S.night = v; updateLight(); if (v) { fly({ p: [0.4, 1.6, 5.6], t: [-0.4, 1.9, 2.0] }); toast('三五之夜，明月半牆，桂影斑駁', 3500); } },
+  autoRotate(v) { controls.autoRotate = v; },
+  // 測試用：3D 座標 → 畫面座標
+  project(x, y, z) { const v = new THREE.Vector3(x, y, z).project(camera), r = canvas.getBoundingClientRect(); return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height }; },
+};
+applyStage(STAGES[APP.stage]); S.time = APP.time; updateLight();
+APP.ready3d = true;
+document.getElementById('loading').style.display = 'none';
+loop();
+} catch (err) {
+  console.error(err);
+  if (typeof APP !== 'undefined') APP.useFallback(err.message);
+}
+</script>
+</body>
+</html>
